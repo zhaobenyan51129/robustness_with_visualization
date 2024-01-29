@@ -1,0 +1,14 @@
+imagenet/
+data/*
+!data/imagenet_class_index.json
+__pycache__/
+*.pth
+*.pyc
+*.log
+*.txt
+*.zip
+*.tar
+*.gz
+*.rar
+*.tar.gz
+*.ipynb
