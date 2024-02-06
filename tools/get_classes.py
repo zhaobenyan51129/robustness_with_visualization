@@ -9,12 +9,13 @@ import torch
 def get_classes_with_pred(preds, top=1):
     """Decode the prediction of an ImageNet model
 
-    # Arguments
+    Args
         preds: torch tensor encoding a batch of predictions.
         top: Integer, how many top-guesses to return
 
-    # Return
-        lists of top class prediction classes and id
+    Return
+        predicted_classes: list of strings, the class label predicted for each sample in preds.
+        predicted_id: list of integers, the class id predicted for each sample in preds.
     """
 
     class_index_path = 'https://s3.amazonaws.com\
@@ -40,7 +41,13 @@ def get_classes_with_pred(preds, top=1):
     return predicted_classes, predicted_id
 
 def get_classes_with_index(index):
-    '''根据预测类别的index，返回类别名称'''
+    '''根据预测类别的index，返回类别名称
+    
+    Args:
+        index: 预测类别的index
+    Return:
+        predicted_classes: 预测类别的名称
+    '''
     class_index_path = 'https://s3.amazonaws.com\
     /deep-learning-models/image-models/imagenet_class_index.json'
 

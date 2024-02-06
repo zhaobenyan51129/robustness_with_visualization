@@ -1,0 +1,69 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "one_step_attack.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/attack/one_step_attack.py",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            "justMyCode": false,
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "cam_grad_attack.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/attack/cam_grad_attack.py",
+            "args": [
+                "select_images",
+                "--model_name", "vit_b_16",
+                "--mask", "cam",
+                "--ratio", "0.5",
+                "--attacked_pixel", "2000",
+                "--max_loop", "1000",
+                "--output_path", "./data/attacked_cam/2000_0.5"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            "justMyCode": false
+        },
+        {
+            "name": "cam_grad_attack_origin.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/attack/cam_grad_attack_origin.py",
+            "args": [
+                "select_images",
+                "--model_name", "vit_b_16",
+                "--mask", "cam",
+                "--ratio", "0.5",
+                "--ratio_of_succeed", "0.5",
+                "--attacked_pixel", "2000",
+                "--max_loop", "1000",
+                "--output_path", "./data/attacked_cam/2000_0.5_0.5"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            "justMyCode": false
+        }
+
+    ]
+}
+

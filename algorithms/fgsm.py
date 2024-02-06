@@ -8,7 +8,7 @@ def fgsm(model, X, y, eta):
         model: the model
         X: the original images, [batch_size, 3, 224, 224], tensor
         y: the labels of X, [batch_size,], tensor
-        eta: the eta (input variation parameter)   
+        eta: 扰动阈值 
     Returns:
         delta: the adversarial perturbation, [batch_size, 3, 224, 224], tensor     
     """

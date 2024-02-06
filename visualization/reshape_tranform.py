@@ -1,14 +1,16 @@
 '''ViT 计算grad-CAM要用到的函数，其他模型不需要'''
 class ReshapeTransform:
     def __init__(self, model):
-        # input_size = model.patch_embed.img_size
-        # patch_size = model.patch_embed.patch_size
-        # self.h = input_size[0] // patch_size[0]
-        # self.w = input_size[1] // patch_size[1]
-        input_size = model.image_size
-        patch_size = model.patch_size
-        self.h = input_size // patch_size
-        self.w = input_size // patch_size
+        input_size = model.patch_embed.img_size
+        patch_size = model.patch_embed.patch_size
+        self.h = input_size[0] // patch_size[0]
+        self.w = input_size[1] // patch_size[1]
+        
+        # 如果使用pytorch自带的预训练模型，可以使用下面的代码
+        # input_size = model.image_size
+        # patch_size = model.patch_size
+        # self.h = input_size // patch_size
+        # self.w = input_size // patch_size
 
     def __call__(self, x):
         # remove cls token and reshape

@@ -24,10 +24,10 @@ def load_model(model_str):
     elif model_str == 'vit_l_32':
         model = vit_l_32(weights='ViT_L_32_Weights.IMAGENET1K_V1')
     elif model_str == 'vit_b_16':
-        # model = vit_base_patch16_224()
-        # weights_path = "./data/vit_base_patch16_224.pth"
-        # model.load_state_dict(torch.load(weights_path, map_location = map_location))
-        model = vit_b_16(weights='ViT_B_16_Weights.IMAGENET1K_V1')
+        model = vit_base_patch16_224()
+        weights_path = "./data/vit_base_patch16_224.pth"
+        model.load_state_dict(torch.load(weights_path, map_location = map_location))
+        # model = vit_b_16(weights='ViT_B_16_Weights.IMAGENET1K_V1')
     elif model_str == 'vit_l_16':
         model = vit_l_16(weights='ViT_L_16_Weights.IMAGENET1K_V1') 
     else:

@@ -1,21 +1,21 @@
 import torch
 import torch.nn as nn
 
-def pgd(model, X, y, epsilon, alpha, num_iter):
+def pgd(model, X, y, alpha, eta, num_steps):
     """ Construct FGSM adversarial examples on the examples X
     Args:
         model: the model
         X: the original images, [batch_size, 3, 224, 224], tensor
         y: the labels of X, [batch_size,], tensor
-        epsilon: the epsilon (input variation parameter)
+        eta: the epsilon (input variation parameter)
         alpha: step size
-        num_iter: number of iterations
+        num_steps: number of iterations
     """
     delta = torch.zeros_like(X, requires_grad=True)
-    for t in range(num_iter):
+    for t in range(num_steps):
         loss = nn.CrossEntropyLoss()(model(X + delta), y)
         loss.backward()
-        delta.data = (delta + X.shape[0]*alpha*delta.grad.data).clamp(-epsilon,epsilon)
+        delta.data = (delta + X.shape[0]*alpha*delta.grad.data).clamp(-eta,eta)
         delta.grad.zero_()
     return delta.detach()
 
@@ -29,8 +29,6 @@ def main():
     from tools.get_classes import get_classes_with_index
 
     images, labels = load_images('./select_images.pth')
-    # image = images[0]
-    # label = labels[0]
     classes = get_classes_with_index(labels)
     model = load_model('resnet50')
     epsilon = 0.1

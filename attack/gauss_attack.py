@@ -18,6 +18,7 @@ def get_pretrained_vit_b_16_intermediates(vit_model, X, encoder_num): # vit_mode
             output:[batch, 1000]
       """
       vit_intermediates = []  # 构建储存所有中间层值的列表
+
       # 构造hook函数
       def forward_hook(module, input, output):
             vit_intermediates.append(output)
@@ -29,9 +30,9 @@ def get_pretrained_vit_b_16_intermediates(vit_model, X, encoder_num): # vit_mode
       output = vit_model(X)
       embedding_output = vit_intermediates.pop(0).reshape([1, vit_b_16.embed_dim, -1]).permute(0, 2, 1) + vit_b_16.pos_embed[:, 1:, :]
       intermediate_output=torch.cat([vit_intermediate.unsqueeze(0) for vit_intermediate in vit_intermediates], dim=0)
-      
+
       return embedding_output, intermediate_output, output
-    
+
 def vit_pack(data, encoder): # numpy [1, 224, 224, 3]
     data = torch.tensor(data).permute(0, 3, 1, 2) # [1, 3, 224, 224]
     data = data.to(torch.float32)
@@ -82,7 +83,7 @@ class GaussianNoiseTestVit:
                   self.preturb = np.concatenate(self.preturb, axis=0)
                   if grating:
                         self.preturb[:, :, :, -1] = 0.0
- 
+
             self.preturb_norm = np.linalg.norm(self.preturb.reshape([len(self.preturb), -1]), axis=-1)
 
             #################### Clipping ###################################
@@ -102,7 +103,7 @@ class GaussianNoiseTestVit:
             self.clip_number=np.sum(self.smaller_than_zero_vector,axis=1)+np.sum(self.bigger_than_one_vector,axis=1)
             self.clip_ratio=self.clip_number / (3*self.img_size*self.img_size)
         
-      def get_results(self,Norm=None):
+      def get_results(self, Norm=None):
             '''
             数据处理，得到需要的指标
             Norm:用什么范数，默认为None(二范数),1:1范数，2：2范数，np.inf：无穷范数
@@ -119,16 +120,16 @@ class GaussianNoiseTestVit:
             self.error_encoder_vector = self.attack_encoder - self.unattacked_output[1][None, :]          #encoder层误差
             self.error_logit_vector = self.attack_logit - self.unattacked_output[2][None, :]              #logit层误差
 
-            #embedding层：
+            # embedding层：
             self.embedding_list=[]
             self.error_embedding = np.linalg.norm(self.error_embedding_vector,ord=self.Norm, axis=1) # embedding层误差的二范数
             self.embedding = np.linalg.norm(self.unattacked_output[0][None, :],ord=self.Norm, axis=1) # 扰动前
             self.embedding_list.append(self.embedding)
             self.embedding_list.append(self.error_embedding)
-            #self.relative_embedding= self.error_embedding /self.embedding # [len,]
-            #embedding_list.append(self.relative_embedding)
+            # self.relative_embedding= self.error_embedding /self.embedding # [len,]
+            # embedding_list.append(self.relative_embedding)
 
-            #encoder层
+            # encoder层
             self.encoder_list=[]  #将下面两个list放在一起，encoder_list[0]=encoder_ls,encoder_list[1]=error_encoder_ls
             error_encoder_ls=[]  #各个encoder层的误差的二范数
             encoder_ls=[]  #没有扰动之前各个encoder层的输出的二范数，长度为encoder_num
@@ -174,7 +175,7 @@ class Plot():
             self.dir=dir #储存路径
             self.delta_list=delta_list #delta取值       
       
-      def plot_embedding(self,embedding_list):
+      def plot_embedding(self, embedding_list):
             self.error_embedding=embedding_list[1]
             #绘图
             plt.figure(figsize=(8,8))
@@ -193,7 +194,7 @@ class Plot():
             plt.close()
   
     
-      def plot_encoder(self,encoder_num,encoder_list):
+      def plot_encoder(self, encoder_num, encoder_list):
             # num=[0,encoder_num-1]
             self.error_encoder=encoder_list[1]
             #绘图

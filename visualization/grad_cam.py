@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import sys
 sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
-from tools.get_classes import get_classes_with_pred
+from tools.get_classes import get_classes_with_pred, get_classes_with_index
 
 class ActivationsAndGradients:
     """ Class for extracting activations and
@@ -133,7 +133,18 @@ class GradCAM:
         return result
 
     def __call__(self, input_tensor, target_category=None):
+        '''计算grad-cam和梯度
+        
+        Args:
+            input_tensor: 输入图像，[batch,3,224,224] tensor
+            target_category: 目标类别，int或者list，长度为batch
 
+        Returns:
+            predicted_classes: 预测类别，list，长度为batch
+            cam: grad-cam图像，[batch,224,224] numpy array
+            grad_of_input: 输入图像的梯度，[batch,224,224,3] numpy array
+        
+        '''
         if self.cuda:
             input_tensor = input_tensor.cuda()
 
@@ -143,11 +154,11 @@ class GradCAM:
         output = self.activations_and_grads(input_tensor)  # [batch,1000]
         if isinstance(target_category, int):
             target_category = [target_category] * input_tensor.size(0) # input_tensor.size(0) = batch
-            predicted_classes = None
+            predicted_classes = get_classes_with_index(target_category)
             
         if isinstance(target_category, list):
             target_category = target_category
-            predicted_classes = None
+            predicted_classes = get_classes_with_index(target_category)
 
         if target_category is None:
             predicted_classes, target_category = get_classes_with_pred(output, 1)
@@ -159,17 +170,12 @@ class GradCAM:
         loss.backward(retain_graph=True)
         
         grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
-        # In most of the saliency attribution papers, the saliency is
-        # computed with a single target layer.
-        # Commonly it is the last convolutional layer.
-        # Here we support passing a list with multiple target layers.
-        # It will compute the saliency image for every image,
-        # and then aggregate them (with a default mean aggregation).
-        # This gives you more flexibility in case you just want to
-        # use all conv layers for example, all Batchnorm layers,
-        # or something else.
-        cam_per_layer = self.compute_cam_per_layer(input_tensor) #list,长度为layer个数，每个元素形状为[batch,1,224,224]
-        return predicted_classes, self.aggregate_multi_layers(cam_per_layer), grad_of_input.transpose(0,2,3,1)
+        cam_per_layer = self.compute_cam_per_layer(input_tensor) # list,长度为layer个数，每个元素形状为[batch,1,224,224]
+
+        cam = self.aggregate_multi_layers(cam_per_layer) # [batch,224,224]
+        grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
+        
+        return predicted_classes, cam, grad_of_input
 
     def __del__(self):
         self.activations_and_grads.release()
@@ -257,19 +263,18 @@ def main():
     from visualization.reshape_tranform import ReshapeTransform
 
     model_str = 'vit_b_16'
-    # model_str = 'vit_b_16'
     data_path = './select_images.pth'
     model = load_model(model_str)
     images, labels = load_images(data_path)
-    target_layers = [model.encoder.layers[-1].ln_1]
-    # target_layers = [model.blocks[-1].norm1]
+    # target_layers = [model.encoder.layers[-1].ln_1]
+    target_layers = [model.blocks[-1].norm1]
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
     cam = GradCAM(model=model, target_layers=target_layers,reshape_transform=reshape_transform, use_cuda=use_cuda)
     predicted_classes, grayscale_cam, grad_of_input = cam(apply_normalization(images), target_category=None)
     img = images.permute(0, 2, 3, 1).cpu().numpy()
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
-    show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_torch.jpg')
+    show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')
 
 if __name__ == '__main__':
     main()

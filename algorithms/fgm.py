@@ -8,16 +8,18 @@ def fgm(model, X, y, eta):
         model: the model
         X: the original images, [batch_size, 3, 224, 224], tensor
         y: the labels of X, [batch_size,], tensor
-        eta: the eta (input variation parameter)   
+        eta: 扰动阈值    
     Returns:
         delta: the adversarial perturbation, [batch_size, 3, 224, 224], tensor     
     """
+    batch_size = X.shape[0]
     delta = torch.zeros_like(X, requires_grad=True)
     loss = nn.CrossEntropyLoss()(model(X + delta), y)
     loss.backward()
-    g = delta.grad.detach().clone()
-    norm_g = torch.norm(g, p=2)
-    return eta * (g / norm_g)
+    grad = delta.grad.detach().clone()
+    normed_grad =  torch.norm(grad.view(batch_size, -1), p=2, dim=1)
+    # norm_g = torch.norm(g, p=2)
+    return eta * (grad / normed_grad.view(-1, 1, 1, 1))
 
 
 def main():
