@@ -32,11 +32,11 @@
             "args": [
                 "select_images",
                 "--model_name", "vit_b_16",
-                "--mask", "cam",
+                "--mask", "grad",
                 "--ratio", "0.5",
                 "--attacked_pixel", "2000",
                 "--max_loop", "1000",
-                "--output_path", "./data/attacked_cam/2000_0.5"
+                "--output_path", "./data/attacked_grad/2000_0.5"
             ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",

@@ -8,7 +8,7 @@ import torch
 from datasets.load_images import load_images
 from datasets.normalize import apply_normalization
 from models.load_model import load_model
-from tools.show_images import show_images
+from tools.show_images import show_images, plot_distrubution
 from visualization.grad_cam import GradCAM, show_cam_on_image
 from visualization.reshape_tranform import ReshapeTransform
 from tqdm import tqdm
@@ -75,7 +75,7 @@ class GradCAMWrapper:
             output_path: 图片保存路径
             save_name: 图片保存名称
         '''
-        # grad = self.__normalize(grad_of_input)
+        grad_of_input = self.__normalize(grad_of_input)
         if output_path:
             save_path = os.path.join(output_path, 'grad')
             if not os.path.exists(save_path):
@@ -129,7 +129,13 @@ class Attack:
         return attacked_tensor
     
     def get_attacked_tensor(self, input, feature_array):
-        '''input被攻击后的图片，可直接作为模型输入'''
+        '''input被攻击后的图片，可直接作为模型输入
+        
+        Args:
+            input: 输入张量，shape: [batch, 3, 224, 224]
+            feature_array: 特征图，shape: [batch, 224, 224] or [batch, 3, 224, 224]
+        '''
+    
         noise = np.random.normal(loc=0.0, scale= self.ratio, size = input.shape)
         if self.mask == 'cam' or self.mask == 'grad':
             dim = np.ndim(feature_array)
@@ -137,7 +143,7 @@ class Attack:
             if dim == 3:
                 attacked_tensor = self.add_grey_to_channel(top_array, input).float()
             elif dim == 4:
-                attacked_tensor = (input + top_array * noise).float()
+                attacked_tensor = (input.cpu() + top_array * noise).float()
             else:
                 print('不支持的维度')
 
@@ -192,10 +198,12 @@ class Attack:
 
             title = [f'{orig}/{pred}' for orig, pred in zip(original_classes, predicted_classes)]
             img = attacked_tensor.permute(0, 2, 3, 1).cpu().numpy()
+            grad_of_input_tensor = torch.from_numpy(grad_of_input.transpose(0, 3, 1, 2))
 
             show_images(attacked_tensor, titles = title, output_path = os.path.join(output_path, 'attacked_images'), save_name = f'{str(loop_count)}.png')
             self.gradcam.show_cam(img, grayscale_cam, title, output_path = output_path, save_name = f'{str(loop_count)}.png')
             self.gradcam.show_grad(grad_of_input, title, output_path = output_path, save_name = f'{str(loop_count)}.png')
+            plot_distrubution(grad_of_input_tensor, titles=title, output_path=os.path.join(output_path, 'distribution_of_grad'), save_name=f'{str(loop_count)}.png')
 
             num_differences = sum(pred_class != orig_class for pred_class, orig_class in zip(predicted_classes, original_classes))
             num_differences_list.append(num_differences)

@@ -174,7 +174,7 @@ class GradCAM:
 
         cam = self.aggregate_multi_layers(cam_per_layer) # [batch,224,224]
         grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
-        
+
         return predicted_classes, cam, grad_of_input
 
     def __del__(self):

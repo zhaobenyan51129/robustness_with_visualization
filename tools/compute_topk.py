@@ -7,7 +7,7 @@ def compute_top_indics(X, top_num=10):
         X: 输入数组，shape: (batch, 224, 224, 3) or (batch, 224,224), numpy
         top_num: 前n大的值
     return: 
-        top_array: numpy[batch, 3, 224,224]，前n大的值为1，其余为0
+        top_array: numpy[batch, 3, 224,224] or [batch, 224,224] ，前n大的值为1，其余为0
         coordinates: 前n大值的位置, numpy, shape: (batch, top_num, dim - 1)
     '''
     batch = X.shape[0]
