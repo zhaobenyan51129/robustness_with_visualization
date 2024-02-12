@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import sys
@@ -39,11 +40,6 @@ class AdversarialAttacksOneStep(object):
         perturbation = self.eta * (self.grad / norm_grad)
         return perturbation
     
-    def gaussian_noise(self):
-        '''Gaussian noise'''
-        perturbation = torch.clamp(torch.randn_like(self.X), -self.eta, self.eta)
-        return perturbation
-    
     def grad_seg_positive(self):
         '''只保留梯度的正值，负值置为0'''
         gradient = self.get_grad()
@@ -70,6 +66,20 @@ class AdversarialAttacksOneStep(object):
         '''获取梯度'''
         gradient = self.delta.grad.detach().clone()
         return gradient 
+    
+    def gaussian_noise(self, k=None):
+        '''Gaussian noise'''
+        perturbation = torch.clamp(torch.randn_like(self.X), -self.eta, self.eta)
+        # noise = np.random.normal(loc=0.0, scale=0.5, size = self.X.shape)
+        # if k == None:
+        #     perturbation = noise
+        # else:
+        #     mask = np.zeros(self.X.shape)
+        #     one_indices = np.random.choice(np.prod(self.X.shape), size=k, replace=False)
+        #     indices = np.unravel_index(one_indices, self.X.shape)
+        #     mask[indices] = 1
+        #     perturbation = mask * noise
+        return perturbation
     
     def normalized(self, input_tensor):
         '''归一化'''

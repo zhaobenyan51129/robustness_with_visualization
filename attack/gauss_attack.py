@@ -42,7 +42,7 @@ def vit_pack(data, encoder): # numpy [1, 224, 224, 3]
         vit_intermediates_encoder=vit_intermediates[i][:, 1:, :].reshape(-1).detach().numpy()
         vit_intermediates_list.append(vit_intermediates_encoder)
     intermediates_output = np.stack(vit_intermediates_list)
-    return embedding_output.reshape(-1).detach().numpy(),intermediates_output, output.reshape(-1).detach().numpy()
+    return embedding_output.reshape(-1).detach().numpy(), intermediates_output, output.reshape(-1).detach().numpy()
 
 class GaussianNoiseTestVit:
 

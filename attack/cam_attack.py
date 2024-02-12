@@ -8,7 +8,7 @@ import torch
 from data_preprocessor.load_images import load_images
 from data_preprocessor.normalize import apply_normalization
 from models.load_model import load_model
-from tools.show_images import show_images, plot_distrubution
+from tools.show_images import show_images, plot_distribution, plot_line_chart
 from visualization.grad_cam import GradCAM, show_cam_on_image
 from visualization.reshape_tranform import ReshapeTransform
 from tqdm import tqdm
@@ -45,10 +45,10 @@ class GradCAMWrapper:
             input_tensor: 用于模型输入的tensor, 没有normalize, tensor[batch,3,224,224]
             target_category: 目标类别的索引，如果为None，则会用预测类别的索引
         '''
-        predicted_classes, grayscale_cam, grad_of_input = self.cam(input_tensor=apply_normalization(input_tensor), target_category=target_category)
-        return predicted_classes, grayscale_cam, grad_of_input
+        predicted_classes, grayscale_cam= self.cam(input_tensor=apply_normalization(input_tensor), target_category=target_category)
+        return predicted_classes, grayscale_cam
     
-    def show_cam(self, img, grayscale_cam, labels, output_path = None, save_name = None):
+    def show_cam(self, img, grayscale_cam, labels, output_path = None, save_name = None, main_title = None):
         '''将grad-cam图叠加到原始图片上，并显示
         Args:
             img: 原始图片: numpy[batch, 224, 224, 3]
@@ -56,6 +56,7 @@ class GradCAMWrapper:
             labels: 画图显示的label, 一般是预测类别，shape: [batch,]
             output_path: 图片保存路径
             save_name: 图片保存名称
+            main_title: 图片的大标题
         '''
         img = self.__normalize(img)
         visualization = show_cam_on_image(img,
@@ -65,23 +66,7 @@ class GradCAMWrapper:
             save_path = os.path.join(output_path, 'cam')
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
-        show_images(visualization, labels, output_path=save_path, save_name = save_name)
-    
-    def show_grad(self, grad_of_input, labels, output_path = None, save_name = None):
-        '''显示预测类别对输入的梯度
-        Args:
-            grad_of_input: 预测类别对输入的梯度，shape: [batch, 3, 224, 224], numpy
-            labels: 画图显示的label, 一般是预测类别，shape: [batch,]
-            output_path: 图片保存路径
-            save_name: 图片保存名称
-        '''
-        grad_of_input = self.__normalize(grad_of_input)
-        if output_path:
-            save_path = os.path.join(output_path, 'grad')
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
-
-        show_images(grad_of_input, labels, output_path=save_path, save_name = save_name)
+        show_images(visualization, labels, output_path=save_path, save_name = save_name, main_title = main_title)
     
     def __normalize(self, input_tensor):
         '''将输入的tensor归一化到[0,1]之间'''
@@ -93,7 +78,7 @@ class GradCAMWrapper:
         normalized_input_tensor = (input_tensor - min_value) / (max_value - min_value)
         return normalized_input_tensor
 
-class Attack:
+class CamAttack:
     def __init__(self, gradcam, input_tensor, num = 200, ratio = 0.5):
         '''进行攻击的类
         Args:
@@ -128,50 +113,41 @@ class Attack:
 
         return attacked_tensor
     
-    def get_attacked_tensor(self, input, feature_array):
+    def get_attacked_tensor(self, input, grayscale_cam = None, noise = None):
         '''input被攻击后的图片，可直接作为模型输入
         
         Args:
             input: 输入张量，shape: [batch, 3, 224, 224]
-            feature_array: 特征图，shape: [batch, 224, 224] or [batch, 3, 224, 224]
+            grayscale_cam: cam特征图，shape: [batch, 224, 224]
+            noise: 噪声
         '''
-    
-        noise = np.random.normal(loc=0.0, scale= self.ratio, size = input.shape)
-        if self.mask == 'cam' or self.mask == 'grad':
-            dim = np.ndim(feature_array)
-            top_array, _ = compute_top_indics(feature_array, self.num)
-            if dim == 3:
-                attacked_tensor = self.add_grey_to_channel(top_array, input).float()
-            elif dim == 4:
-                attacked_tensor = (input.cpu() + top_array * noise).float()
-            else:
-                print('不支持的维度')
+        if noise is None:
+            noise = np.random.normal(loc=0.0, scale= self.ratio, size = input.shape)
 
-        else: # self.mode == 'random':
-            shape = input.shape
-            mask = np.zeros(shape)
-            one_indices = np.random.choice(np.prod(shape), size=self.num, replace=False)
-            indices = np.unravel_index(one_indices, shape)
+        if grayscale_cam is not None:
+            top_array, _ = compute_top_indics(grayscale_cam, self.num)
+            attacked_tensor = self.add_grey_to_channel(top_array, input).float()
+        else: # 随机攻击
+            mask = np.zeros(input.shape)
+            one_indices = np.random.choice(np.prod(input.shape), size=self.num, replace=False)
+            indices = np.unravel_index(one_indices, input.shape)
             mask[indices] = 1
             attacked_tensor = (input + mask * noise).float()
-        assert attacked_tensor.shape == input.shape  
+
         return attacked_tensor
 
-    def __call__(self, target_category = None, mask = 'cam', max_loop = 1000, output_path = None):
-        '''进行攻击
+    def __call__(self, mode = 'random', target_category = None, max_loop = 1000, output_path = None):
+        '''根据cam进行攻击
         Args:
+            mode: 攻击模式，random或者cam
             target_category: 目标类别的索引，如果为None，则会用预测类别的索引
-            mask: 攻击的方式，可选'cam', 'grad', 'random'
             max_loop: 最大迭代次数
             output_path: 输出路径
         '''
         if os.path.exists(output_path) and os.path.isdir(output_path):
             print(f'删除文件夹：{output_path}')
             shutil.rmtree(output_path)
-    
-        print(f"攻击方式 = {mask}")
 
-        self.mask = mask
         num_differences_list = []
 
         for i in range(max_loop + 1):
@@ -179,35 +155,29 @@ class Attack:
             print(f'loop_count = {loop_count}')
             if i == 0:
                 attacked_tensor = self.input_tensor
-                original_classes, grayscale_cam, grad_of_input = self.gradcam(attacked_tensor, target_category) 
-                print(f"原始的预测类别 = {original_classes}")
+                original_classes, grayscale_cam = self.gradcam(attacked_tensor, target_category) 
+                print(f"原始的预测类别 = {original_classes}")  
                 predicted_classes = original_classes
-            else:    
-                if self.mask == 'cam':
-                    feature_array = grayscale_cam
-                elif self.mask == 'grad':
-                    feature_array = grad_of_input
-                elif self.mask == 'random':
-                    pass
-                else:
-                    raise ValueError("Invalid value for 'mask'. Use 'cam', 'grad', or 'random'.")
+            else: 
+                if mode == 'random':
+                    attacked_tensor = self.get_attacked_tensor(attacked_tensor)
+                else:  
+                    attacked_tensor = self.get_attacked_tensor(attacked_tensor, grayscale_cam)
 
-                attacked_tensor = self.get_attacked_tensor(attacked_tensor, feature_array)
+                predicted_classes, grayscale_cam = self.gradcam(attacked_tensor, target_category)
 
-                predicted_classes, grayscale_cam, grad_of_input = self.gradcam(attacked_tensor, target_category)
-
-            title = [f'{orig}/{pred}' for orig, pred in zip(original_classes, predicted_classes)]
+            # title = [f'{orig}/{pred}' for orig, pred in zip(original_classes, predicted_classes)]
+            title = [f'{orig}/{pred}' if orig != pred else f'{orig}' for orig, pred in zip(original_classes, predicted_classes)]
             img = attacked_tensor.permute(0, 2, 3, 1).cpu().numpy()
-            grad_of_input_tensor = torch.from_numpy(grad_of_input.transpose(0, 3, 1, 2))
-
-            show_images(attacked_tensor, titles = title, output_path = os.path.join(output_path, 'attacked_images'), save_name = f'{str(loop_count)}.png')
-            self.gradcam.show_cam(img, grayscale_cam, title, output_path = output_path, save_name = f'{str(loop_count)}.png')
-            self.gradcam.show_grad(grad_of_input, title, output_path = output_path, save_name = f'{str(loop_count)}.png')
-            plot_distrubution(grad_of_input_tensor, titles=title, output_path=os.path.join(output_path, 'distribution_of_grad'), save_name=f'{str(loop_count)}.png')
 
             num_differences = sum(pred_class != orig_class for pred_class, orig_class in zip(predicted_classes, original_classes))
             num_differences_list.append(num_differences)
             print(f'num_differences = {num_differences}')
+
+            show_images(attacked_tensor, titles = title, output_path = os.path.join(output_path, 'attacked_images'), save_name = f'{str(loop_count)}.png', main_title = f'{num_differences} images are misclassified')
+            self.gradcam.show_cam(img, grayscale_cam, title, output_path = output_path, save_name = f'{str(loop_count)}.png', main_title = f'{num_differences} images are misclassified')
+
+            plot_distribution(grayscale_cam, titles = title, output_path = os.path.join(output_path, 'cam_distribution'), save_name = f'{str(loop_count)}.png', main_title = f'{num_differences} images are misclassified')
 
             if num_differences >= len(predicted_classes): # 所有的图片都被攻击成功
                 print(f"攻击之后的预测类别：{predicted_classes}")
@@ -223,37 +193,66 @@ class Attack:
                         'predicted_classes': predicted_classes}
         
         return result_dict
-    
 
 def parse_args():
     '''解析命令行参数'''
     parser = argparse.ArgumentParser(description='Conduct attack experiments')
-    parser.add_argument('image_input', type=str, help='path to input image')
     parser.add_argument('--model_name', type=str, default='vit_b_16', help='model name')
-    parser.add_argument('--mask', type=str, default='cam', choices=['grad', 'cam', 'random'], help='mask type')
     parser.add_argument('--ratio', type=float, default=0.5, help='ratio for attack')
     parser.add_argument('--attacked_pixel', type=int, default=200, help='number of attacked pixels')
     parser.add_argument('--max_loop', type=int, default=1000, help='max loop for attack')
     parser.add_argument('--output_path', type=str, default=None, help='output path for results')
     return parser.parse_args()
 
-def main():
+def main_multi_step():
     '''测试'''
     args = parse_args()
-    image_input = args.image_input
     model_name = args.model_name
-    mask = args.mask
     ratio = args.ratio
     attacked_pixel = args.attacked_pixel
     max_loop = args.max_loop
-    output_path = args.output_path if args.output_path else f'./data/{image_input}_attacked_{mask}/{attacked_pixel}_{ratio}'
+    mode = 'cam'
 
-    input_tensor, labels = load_images(file_path=f'./select_images.pth')
+    output_path = f'./data/attacked_cam_multistep/{mode}/{attacked_pixel}_{ratio}'
+    # input_tensor, labels = load_images(file_path=f'./select_images.pth')
+    input_tensor, labels = load_images(file_path=f'./selected_images/data_100.pth')
+    input_tensor = input_tensor[:36]
+    labels = labels[:36]
     gradcam = GradCAMWrapper(model_name)
+    attacker = CamAttack(gradcam, input_tensor, num=attacked_pixel, ratio = ratio)
+    result_dict = attacker(mode=mode, max_loop=max_loop, output_path = output_path)
 
-    attacker = Attack(gradcam, input_tensor, num=attacked_pixel, ratio = ratio)
-    result_dict = attacker(mask = mask, max_loop=max_loop, output_path = output_path)
+def main_onestep_attack():
+    '''测试'''
+    args = parse_args()
+    model_name = args.model_name
+    attacked_pixel = args.attacked_pixel
+    max_loop = args.max_loop
+    ratios = np.arange(0, 1, 0.1)
+    succeed = []
+    gradcam = GradCAMWrapper(model_name)
+    mode = 'cam'
+    for ratio in ratios:
+        output_path = f'./data/attacked_cam_onestep/{mode}/{attacked_pixel}_{ratio}'
+        input_tensor, labels = load_images(file_path=f'./selected_images/data_100.pth')
+        input_tensor = input_tensor[:36]
+        labels = labels[:36]
+        attacker = CamAttack(gradcam, input_tensor, num=attacked_pixel, ratio = ratio)
+        result_dict = attacker(mode=mode, max_loop=max_loop, output_path = output_path)
+        # torch.save(result_dict, os.path.join(output_path, f'result_dict_{ratio}.pth'))
+        changed_images = result_dict['num_differences_list'][-1]
+        succeed.append(changed_images)
+
+    print(succeed)
+    save_dict = {'ratios': ratios, 'succeed': succeed}
+    torch.save(save_dict, os.path.join(f'./data/attacked_cam_onestep/{mode}', f'save_dict.pth'))
+
+    plot_line_chart(ratios, succeed, output_path = f'./data/attacked_cam_onestep/{mode}', save_name = f'random_succeed.png', title = 'num_images_succeed')
+
 
 if __name__ == '__main__':
-    main()
-    # 调用方式：python attack/cam_grad_attack.py select_images --model_name vit_b_16 --mask cam --ratio 0.5 --attacked_pixel 2000 --max_loop 1000 --output_path ./data/attacked_cam/2000_0.5
+    # main_multi_step()
+    # # 调用方式：python attack/cam_attack.py --model_name vit_b_16 --ratio 0.5 --attacked_pixel 2000 --max_loop 1000
+
+    main_onestep_attack()
+    # # 调用方式：python attack/cam_attack.py --model_name vit_b_16 --attacked_pixel 2000 --max_loop 1  

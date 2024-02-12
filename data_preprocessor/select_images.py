@@ -67,11 +67,11 @@ def main():
     sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
     from models.load_model import load_model
     model1 = load_model('resnet50')
-    model2 = load_model('vit_b_32')
+    model2 = load_model('vit_b_16')
     models = [model1, model2]
     data_root = './imagenet'
-    select = SelectImageNet(models, data_root=data_root, load_images_num=9, image_size=224)
-    select.creat_image_file('select_images.pth')
+    select = SelectImageNet(models, data_root=data_root, load_images_num=64, image_size=224)
+    select.creat_image_file('select_images_100.pth')
     
 if __name__ == '__main__':
     main()

@@ -2,6 +2,8 @@
 import cv2
 import numpy as np
 import sys
+import torch
+import torch.nn as nn
 sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
 from tools.get_classes import get_classes_with_pred, get_classes_with_index
 
@@ -142,7 +144,7 @@ class GradCAM:
         Returns:
             predicted_classes: 预测类别，list，长度为batch
             cam: grad-cam图像，[batch,224,224] numpy array
-            grad_of_input: 输入图像的梯度，[batch,224,224,3] numpy array
+            # grad_of_input: 输入图像的梯度，[batch,224,224,3] numpy array
         
         '''
         if self.cuda:
@@ -169,13 +171,18 @@ class GradCAM:
         loss = self.get_loss(output, target_category)  # 获取目标类别logit的值
         loss.backward(retain_graph=True)
         
-        grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
         cam_per_layer = self.compute_cam_per_layer(input_tensor) # list,长度为layer个数，每个元素形状为[batch,1,224,224]
-
         cam = self.aggregate_multi_layers(cam_per_layer) # [batch,224,224]
-        grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
 
-        return predicted_classes, cam, grad_of_input
+        # 输出对输入的梯度
+        # grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
+        # grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
+        
+        # 交叉熵对输入的梯度
+        # cross_entropy_loss = nn.CrossEntropyLoss()(output, torch.tensor(target_category).cuda())
+        # cross_entropy_loss.backward()
+        # grad = input_tensor.grad.detach().clone()
+        return predicted_classes, cam
 
     def __del__(self):
         self.activations_and_grads.release()
@@ -256,8 +263,8 @@ def center_crop_img(img: np.ndarray, size: int):
 
 def main():
     '''测试'''
-    from datasets.load_images import load_images
-    from datasets.normalize import apply_normalization
+    from data_preprocessor.load_images import load_images
+    from data_preprocessor.normalize import apply_normalization
     from models.load_model import load_model
     from tools.show_images import show_images
     from visualization.reshape_tranform import ReshapeTransform
@@ -271,7 +278,7 @@ def main():
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
     cam = GradCAM(model=model, target_layers=target_layers,reshape_transform=reshape_transform, use_cuda=use_cuda)
-    predicted_classes, grayscale_cam, grad_of_input = cam(apply_normalization(images), target_category=None)
+    predicted_classes, grayscale_cam = cam(apply_normalization(images), target_category=None)
     img = images.permute(0, 2, 3, 1).cpu().numpy()
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
     show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')

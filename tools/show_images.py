@@ -47,11 +47,11 @@ def show_images(imgs, titles = None, output_path = None, save_name = None, scale
         plt.show()
 
 
-def plot_distrubution(input, titles = None, output_path = None, save_name = None, scale=2, main_title = None): 
+def plot_distribution(input, titles = None, output_path = None, save_name = None, scale=2, main_title = None): 
     '''显示分布
 
     Args:
-        input: [batch, 3, 224, 224] tensor
+        input: [batch, 3, 224, 224]， [batch,224,224] numpy array or tensor
         titles: 标题， 长度与batch相等的list
         output_path: 输出路径，如果不为None，则保存图片到指定路径
         save_name: 保存的图片名
@@ -67,7 +67,8 @@ def plot_distrubution(input, titles = None, output_path = None, save_name = None
     fig.suptitle(main_title, fontsize=16) 
     axes = axes.flatten()
     for i, (ax, single_input) in enumerate(zip(axes, input)):
-        single_input = single_input.cpu().numpy()
+        if torch.is_tensor(single_input):# tensor
+            single_input = single_input.cpu().numpy()
         flattened_single_input = single_input.flatten()
         sns.histplot(flattened_single_input, ax=ax, bins=50, kde=True, alpha=0.5)
         if titles is not None:
@@ -97,10 +98,32 @@ def plot_distrubution(input, titles = None, output_path = None, save_name = None
     else:
         plt.show()
 
+def plot_line_chart(x, y, output_path = None, save_name = None, title = None):
+    '''画出y关于x的折线图
+    Args:
+        x: x轴的值
+        y: y轴的值
+        output_path: 输出路径，如果不为None，则保存图片到指定路径
+        save_name: 保存的图片名
+        title: 图片的大标题
+    '''
+    plt.plot(x, y)
+    # for i, j in zip(x, y):
+    #     plt.text(i, j, f'({round(i, 2)},{round(j, 2)})') 
+    plt.title(title)
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_path = os.path.join(output_path, save_name)
+        plt.savefig(output_path)
+        plt.close()
+    else:
+        plt.show()
+
 if __name__ == '__main__':
     import sys
     sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
-    from datasets.load_images import load_images
+    from data_preprocessor.load_images import load_images
     from tools.get_classes import get_classes_with_index
     images, labels = load_images('./select_images.pth')
     classes = get_classes_with_index(labels)
