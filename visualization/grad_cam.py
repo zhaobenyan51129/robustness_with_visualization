@@ -2,9 +2,10 @@
 import cv2
 import numpy as np
 import sys
-import torch
-import torch.nn as nn
-sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(BASE_DIR)
+sys.path.append(BASE_DIR)
 from tools.get_classes import get_classes_with_pred, get_classes_with_index
 
 class ActivationsAndGradients:
@@ -87,7 +88,7 @@ class GradCAM:
     def get_cam_image(self, activations, grads):
         weights = self.get_cam_weights(grads) # weights=目标layer的grad maps求平均[batch,channels,1,1]
         weighted_activations = weights * activations
-        cam = weighted_activations.sum(axis=1) #目标layer的cam图像[batch,height,width]
+        cam = weighted_activations.sum(axis=1) # 目标layer的cam图像[batch,height,width]
         return cam
 
     @staticmethod
@@ -106,19 +107,18 @@ class GradCAM:
 
         cam_per_target_layer = []
         # Loop over the saliency image from every layer
-
         for layer_activations, layer_grads in zip(activations_list, grads_list):
             cam = self.get_cam_image(layer_activations, layer_grads) #（batch,height,width)
             cam[cam < 0] = 0  # works like mute the min-max scale in the function of scale_cam_image
             scaled = self.scale_cam_image(cam, target_size) # 将cam图reshape到输入尺寸[batch,224,224]
-            cam_per_target_layer.append(scaled[:, None, :])  #[batch,1,224,224]
+            cam_per_target_layer.append(scaled[:, None, :])  # [batch,1,224,224]
 
         return cam_per_target_layer # 长度为layer的个数，每个元素形状为[batch,1,224,224]
 
     def aggregate_multi_layers(self, cam_per_target_layer):
-        cam_per_target_layer = np.concatenate(cam_per_target_layer, axis=1) #[batch,layers,224,224]
+        cam_per_target_layer = np.concatenate(cam_per_target_layer, axis=1) # [batch,layers,224,224]
         cam_per_target_layer = np.maximum(cam_per_target_layer, 0)  # 这里应该本来就没有负的，可能是考虑到精度
-        result = np.mean(cam_per_target_layer, axis=1)  #对所有layer求均值 [batch,224,224]
+        result = np.mean(cam_per_target_layer, axis=1)  # 对所有layer求均值 [batch,224,224]
         return self.scale_cam_image(result)  
 
     @staticmethod
@@ -270,7 +270,7 @@ def main():
     from visualization.reshape_tranform import ReshapeTransform
 
     model_str = 'vit_b_16'
-    data_path = './select_images.pth'
+    data_path = './data/images_100.pth'
     model = load_model(model_str)
     images, labels = load_images(data_path)
     # target_layers = [model.encoder.layers[-1].ln_1]
@@ -278,8 +278,11 @@ def main():
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
     cam = GradCAM(model=model, target_layers=target_layers,reshape_transform=reshape_transform, use_cuda=use_cuda)
-    predicted_classes, grayscale_cam = cam(apply_normalization(images), target_category=None)
-    img = images.permute(0, 2, 3, 1).cpu().numpy()
+    predicted_classes, grayscale_cam = cam(images, target_category=None)
+    img = images.permute(0, 2, 3, 1).detach().cpu().numpy()
+    # 归一化到[0,1]
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+    
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
     show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')
 
