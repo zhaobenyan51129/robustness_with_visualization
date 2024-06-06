@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def compute_top_indics(X, top_num=10):
     '''计算输入数组的前n大的值和位置
     Args:

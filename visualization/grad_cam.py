@@ -3,9 +3,17 @@ import cv2
 import numpy as np
 import sys
 import os
+import torch
+import torch.nn as nn
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 print(BASE_DIR)
 sys.path.append(BASE_DIR)
+from data_preprocessor.load_images import load_images
+from models.load_model import load_model
+from tools.show_images import show_images
+from visualization.reshape_tranform import ReshapeTransform
+
 from tools.get_classes import get_classes_with_pred, get_classes_with_index
 
 class ActivationsAndGradients:
@@ -175,14 +183,14 @@ class GradCAM:
         cam = self.aggregate_multi_layers(cam_per_layer) # [batch,224,224]
 
         # 输出对输入的梯度
-        # grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
-        # grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
+        grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
+        grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
         
         # 交叉熵对输入的梯度
-        # cross_entropy_loss = nn.CrossEntropyLoss()(output, torch.tensor(target_category).cuda())
-        # cross_entropy_loss.backward()
-        # grad = input_tensor.grad.detach().clone()
-        return predicted_classes, cam
+        cross_entropy_loss = nn.CrossEntropyLoss()(output, torch.tensor(target_category).cuda())
+        cross_entropy_loss.backward()
+        grad_of_loss_fun = input_tensor.grad.detach().clone()
+        return predicted_classes, cam, grad_of_input, grad_of_loss_fun
 
     def __del__(self):
         self.activations_and_grads.release()
@@ -263,11 +271,6 @@ def center_crop_img(img: np.ndarray, size: int):
 
 def main():
     '''测试'''
-    from data_preprocessor.load_images import load_images
-    from data_preprocessor.normalize import apply_normalization
-    from models.load_model import load_model
-    from tools.show_images import show_images
-    from visualization.reshape_tranform import ReshapeTransform
 
     model_str = 'vit_b_16'
     data_path = './data/images_100.pth'
@@ -278,13 +281,14 @@ def main():
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
     cam = GradCAM(model=model, target_layers=target_layers,reshape_transform=reshape_transform, use_cuda=use_cuda)
-    predicted_classes, grayscale_cam = cam(images, target_category=None)
+    predicted_classes, grayscale_cam, grad_of_input, grad_of_loss_fun = cam(images, target_category=None)
     img = images.permute(0, 2, 3, 1).detach().cpu().numpy()
     # 归一化到[0,1]
     img = (img - np.min(img)) / (np.max(img) - np.min(img))
-    
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
     show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')
+    torch.save(grad_of_input, './data/grad_of_input.pth')
+    torch.save(grad_of_loss_fun, './data/grad_of_loss_fun.pth')
 
 if __name__ == '__main__':
     main()

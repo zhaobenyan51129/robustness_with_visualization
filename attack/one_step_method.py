@@ -148,8 +148,8 @@ def merge_result(etas, output_path):
 
 if __name__ == '__main__':
     etas = np.arange(0, 0.2, 0.01)
-    # model_str = 'vit_b_16'  # 'resnet50'
-    model_str = 'resnet50'
+    model_str = 'vit_b_16'  # 'resnet50'
+    # model_str = 'resnet50'
     output_path = f'./data/one_step_attack_{model_str}'
     main(etas, model_str, output_path)
     merge_result(etas, output_path)

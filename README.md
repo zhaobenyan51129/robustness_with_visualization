@@ -11,5 +11,21 @@
     * 筛选所有模型预测正确的100张图片；
     * 筛选vit整体分类正确率排名第1,101,201，…,901的类别，并选出所有预测正确的图片；
     * 所有筛选出来的图片文件保存在data文件夹下；
+
+## 工具函数
+./tools文件夹下是一些常用的工具函数，包括：
+    * show_images.py:画图常用函数；
+    * create_video.py:将图片做成视频；
+    * get_classes.py:根据json文件获取imagenet每个类别的索引对应类别的中文名；
+    * compute_topk.py:计算输入数组的前n大的值和位置
+
 ## 可视化
-1. grad-cam:见./visualization/grad_cam.py
+grad-cam:见./visualization/grad_cam.py
+    * 可以选择在类class GradCAM的__call__方法中同时输出梯度；
+
+## 对抗攻击方法
+1. 单步法：./algorithms/one_step_attacker.py,封装了不同的单步法
+    * fgsm
+    * fgm
+    * grad_seg_positive:只攻击梯度为正的pixel
+    * 

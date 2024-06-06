@@ -2,8 +2,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import sys
-sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(BASE_DIR)
+sys.path.append(BASE_DIR)
 from tools.compute_topk import compute_top_indics
+from data_preprocessor.load_images import load_images
+from models.load_model import load_model
 
 class AdversarialAttacksOneStep(object):
     def __init__(self, model, X, y, eta):
@@ -16,6 +21,7 @@ class AdversarialAttacksOneStep(object):
         '''
         self.model = model
         self.X = X
+        self.X.requires_grad = True
         self.eta = eta
         self.delta = torch.zeros_like(X, requires_grad=True)
         loss = nn.CrossEntropyLoss()(self.model(X + self.delta), y)
@@ -64,7 +70,9 @@ class AdversarialAttacksOneStep(object):
     
     def get_grad(self):
         '''获取梯度'''
-        gradient = self.delta.grad.detach().clone()
+        # gradient = self.delta.grad.detach().clone()
+        gradient = self.X.grad.detach().clone()
+        
         return gradient 
     
     def gaussian_noise(self, k=None):
@@ -87,3 +95,12 @@ class AdversarialAttacksOneStep(object):
         normalized_input_tensor = (input_tensor - min_value) / (max_value - min_value)
         return normalized_input_tensor
     
+if __name__ == '__main__':
+    model_str = 'vit_b_16'
+    data_path = './data/images_100.pth'
+    model = load_model(model_str)
+    images, labels = load_images(data_path)
+    attcker = AdversarialAttacksOneStep(model, images, labels, 0.1)
+    grad = attcker.get_grad()
+    torch.save(grad, './data/grad_x.pth')
+        
