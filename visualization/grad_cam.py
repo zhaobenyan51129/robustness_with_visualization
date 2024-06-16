@@ -88,6 +88,13 @@ class GradCAM:
 
     @staticmethod
     def get_loss(output, target_category):
+        '''计算输出与目标类别的损失，循环每一个样本，计算真实类别的logit值，值越大表示越接近真实类别
+        Args:
+            output: 网络输出，[batch,1000] tensor，未经过softmax
+            target_category: 目标类别，list，长度为batch
+        Returns:
+            loss: 损失值，tensor
+        '''
         loss = 0
         for i in range(len(target_category)):
             loss = loss + output[i, target_category[i]]
@@ -105,10 +112,10 @@ class GradCAM:
         return width, height
 
     def compute_cam_per_layer(self, input_tensor):
-        # 目标layer的feature maps，list长为layer个数，每个元素shape为 [batch,channel,height,width]
+        # 目标layer的feature maps，长度为layer个数，每个元素shape为[batch,768,14,14]
         activations_list = [a.cpu().data.numpy()
                             for a in self.activations_and_grads.activations]  
-        # 目标layer的grad maps [batch,channel,height,width]
+        # 目标layer的grad maps, 长度为layer个数，每个元素shape为[batch,768,14,14]
         grads_list = [g.cpu().data.numpy()
                       for g in self.activations_and_grads.gradients]  
         target_size = self.get_target_width_height(input_tensor)  #（224,224）
@@ -165,6 +172,10 @@ class GradCAM:
         if isinstance(target_category, int):
             target_category = [target_category] * input_tensor.size(0) # input_tensor.size(0) = batch
             predicted_classes = get_classes_with_index(target_category)
+        
+        if isinstance(target_category, torch.Tensor):
+            target_category = target_category.cpu().numpy()
+            predicted_classes = get_classes_with_index(target_category)
             
         if isinstance(target_category, list):
             target_category = target_category
@@ -176,22 +187,42 @@ class GradCAM:
             assert (len(target_category) == input_tensor.size(0))
 
         self.model.zero_grad()
-        loss = self.get_loss(output, target_category)  # 获取目标类别logit的值
-        loss.backward(retain_graph=True)
+        # 获取目标类别logit的值
+        loss = self.get_loss(output, target_category)  
+        # 进行反向传播
+        loss.backward(retain_graph=True) # 这一步之后self.activations_and_grads.activations和self.activations_and_grads.gradients才有值
+        # loss.backward()
         
         cam_per_layer = self.compute_cam_per_layer(input_tensor) # list,长度为layer个数，每个元素形状为[batch,1,224,224]
         cam = self.aggregate_multi_layers(cam_per_layer) # [batch,224,224]
-
-        # 输出对输入的梯度
-        grad_of_input = input_tensor.grad.detach().cpu().numpy()  # Extract the gradient tensor
-        grad_of_input = grad_of_input.transpose(0, 2, 3, 1)  # [batch,224,224,3]
+        
+        # 可以选择返回输入图像的梯度，这里不返回
+        # grad_of_input, grad_of_loss_fun = self.get_grad_of_loss(input_tensor, output, target_category)
+ 
+        return predicted_classes, cam 
+        # return predicted_classes, cam, grad_of_input, grad_of_loss_fun
+    
+    def get_grad_of_loss(self, input_tensor, output, target_category):
+        '''计算输入图像的梯度
+        Args:
+            input_tensor: 输入图像，[batch,3,224,224] tensor
+            output: 网络输出，[batch,1000] tensor
+            target_category: 目标类别，list，长度为batch
+        Returns:
+            grad_of_input: 输入图像的梯度，[batch,3,224,224] tensor
+            grad_of_loss_fun: 交叉熵对输入的梯度，[batch,3,224,224] tensor
+        '''
+        # 输出损失loss对输入的梯度, 这里的loss是self.get_loss()计算的loss
+        grad_of_input = input_tensor.grad.detach().cpu()  # tensor([batch,3,224,224])
         
         # 交叉熵对输入的梯度
+        self.model.zero_grad() # 清零梯度，否则会累加
+        input_tensor.grad.zero_() # 注意一定要清零梯度，否则会累加
         cross_entropy_loss = nn.CrossEntropyLoss()(output, torch.tensor(target_category).cuda())
         cross_entropy_loss.backward()
-        grad_of_loss_fun = input_tensor.grad.detach().clone()
-        return predicted_classes, cam, grad_of_input, grad_of_loss_fun
-
+        grad_of_loss_fun = input_tensor.grad.detach().cpu().clone()
+        return grad_of_input, grad_of_loss_fun
+    
     def __del__(self):
         self.activations_and_grads.release()
 
@@ -232,6 +263,9 @@ def show_cam_on_image(img: np.ndarray, # [batch,224,224,3]
         heatmaps.append(heatmap)
     heatmap_np = np.stack(heatmaps)
 
+    # 归一化到[0,1]
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+    
     if np.max(img) > 1:
         raise Exception(
             "The input image should np.float32 in the range [0, 1]")
@@ -271,7 +305,6 @@ def center_crop_img(img: np.ndarray, size: int):
 
 def main():
     '''测试'''
-
     model_str = 'vit_b_16'
     data_path = './data/images_100.pth'
     model = load_model(model_str)
@@ -281,14 +314,15 @@ def main():
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
     cam = GradCAM(model=model, target_layers=target_layers,reshape_transform=reshape_transform, use_cuda=use_cuda)
-    predicted_classes, grayscale_cam, grad_of_input, grad_of_loss_fun = cam(images, target_category=None)
+    predicted_classes, grayscale_cam = cam(images, target_category=labels)
+    # predicted_classes, grayscale_cam, grad_of_input, grad_of_loss_fun = cam(images, target_category=labels)
+    
     img = images.permute(0, 2, 3, 1).detach().cpu().numpy()
-    # 归一化到[0,1]
-    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
     show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')
-    torch.save(grad_of_input, './data/grad_of_input.pth')
-    torch.save(grad_of_loss_fun, './data/grad_of_loss_fun.pth')
+    # torch.save(grad_of_input, './data/grad_of_input.pth')
+    # torch.save(grad_of_loss_fun, './data/grad_of_loss_fun.pth')
 
 if __name__ == '__main__':
     main()

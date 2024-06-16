@@ -2,7 +2,10 @@ import os
 import sys
 import numpy as np
 import torch
-sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(BASE_DIR)
+sys.path.append(BASE_DIR)
 from models.load_model import load_model
 from tools.show_images import show_images, plot_distribution, plot_line_chart
 from data_preprocessor.load_images import load_images
@@ -103,7 +106,7 @@ def Attacker(images, labels, model, algorithm, output_path, eta, k):
 def main(etas, model_str, output_path):
     args = parse_args()
     k = args.k
-    images, labels = load_images('./selected_images/data_100.pth')
+    images, labels = load_images('./data/images_100.pth')
     images, labels = images[:16].cuda(), labels[:16].cuda()
     # images, labels = load_images('./select_images.pth')
     

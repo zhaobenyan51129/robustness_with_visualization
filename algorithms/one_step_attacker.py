@@ -20,11 +20,12 @@ class AdversarialAttacksOneStep(object):
             eta: 扰动阈值
         '''
         self.model = model
+        self.model.zero_grad()
         self.X = X
-        self.X.requires_grad = True
         self.eta = eta
         self.delta = torch.zeros_like(X, requires_grad=True)
-        loss = nn.CrossEntropyLoss()(self.model(X + self.delta), y)
+        output = self.model(X + self.delta)
+        loss = nn.CrossEntropyLoss()(output, y)
         loss.backward()
 
     def fgsm(self, grad = None):
@@ -69,9 +70,8 @@ class AdversarialAttacksOneStep(object):
         return topk_grad
     
     def get_grad(self):
-        '''获取梯度'''
-        # gradient = self.delta.grad.detach().clone()
-        gradient = self.X.grad.detach().clone()
+        '''获取梯度，对X求梯度和对delta求梯度是一样的'''
+        gradient = self.delta.grad.detach().clone()
         
         return gradient 
     
@@ -101,6 +101,6 @@ if __name__ == '__main__':
     model = load_model(model_str)
     images, labels = load_images(data_path)
     attcker = AdversarialAttacksOneStep(model, images, labels, 0.1)
-    grad = attcker.get_grad()
-    torch.save(grad, './data/grad_x.pth')
+    grad = attcker.get_grad().cpu()
+    torch.save(grad, './data/grad.pth')
         
