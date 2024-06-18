@@ -10,6 +10,7 @@ from tools.compute_topk import compute_top_indics
 from tools.get_classes import get_classes_with_index
 from tools.show_images import show_images, plot_distribution
 from models.load_model import load_model
+from data_preprocessor.normalize import apply_normalization
 
 
 if torch.cuda.is_available():
@@ -32,7 +33,7 @@ def compute_grad(model, X, y):
     y = y.to(device)
     model.zero_grad()
     delta = torch.zeros_like(X, requires_grad=True).to(device)
-    output = model(X + delta)
+    output = model(apply_normalization(X + delta))
     loss = nn.CrossEntropyLoss()(output, y)
     loss.backward()
     grad = delta.grad.detach().clone()
@@ -42,17 +43,23 @@ def compute_grad(model, X, y):
 def grad_mask(grad, mode = None, **kwargs):
     '''对梯度进行掩码处理，生成于原始梯度相同形状的掩码，用于标记要修改的像素
     Args:mode
-        'None': 返回全为1的掩码
+        'all': 返回全为1的掩码
         'positive': 梯度的正值为1，负值为0
         'negative': 梯度的负值为1，正值为0
         'topk':前k个梯度的绝对值为1，其余为0，需要传入参数k
         'topr':r为改变的pixel的比例，需要传入参数r
     '''
+    if mode == 'all' or mode is None:
+        mask = torch.ones_like(grad)
+        num_attacked = mask.numel()
+        return mask, num_attacked
+    
     mode_dict = {
         'positive': grad_mask_positive,
         'negative': grad_mask_negative,
         'topk': grad_mask_topk,
-        'topr': grad_mask_topr
+        'topr': grad_mask_topr,
+        'randomk': grad_mask_random
     }
     mask, num_attacked = mode_dict[mode](grad, **kwargs)
     return mask, num_attacked
@@ -68,32 +75,43 @@ def grad_mask_negative(grad):
     '''只保留梯度的负值，正值置为0,并返回梯度为负的pixel数'''
     negative_grad = torch.clamp(grad, max=0)
     num_negative = negative_grad[negative_grad < 0].numel()
-    mask = negative_grad.sign()
+    mask = - negative_grad.sign()
     return mask, num_negative
 
-def grad_mask_topk(grad, k = 10):
-    '''前k个梯度的绝对值为1，其余为0'''
-    top_array, coordinates = compute_top_indics(grad, k)
+def grad_mask_topk(grad, topk = 10):
+    '''topk为改变的pixel的个数，梯度绝对值前topk个为1，其余为0'''
+    grad = grad.abs()
+    top_array, _ = compute_top_indics(grad, topk)
     mask = torch.Tensor(top_array).to(device)
-    return mask, k
+    return mask, topk
 
-def grad_mask_topr(grad, r = 0.1):
-    '''r为改变的pixel的比例'''
-    # mask = torch.zeros_like(grad)
+def grad_mask_topr(grad, topr = 0.1):
+    '''topr为改变的pixel的比例，梯度绝对值前topr比例的为1，其余为0'''
+    grad = grad.abs()
     num_pixels = grad[0].numel()
-    print(f'num_pixels: {num_pixels}')
-    num_change_pixels = int(num_pixels * r)
-    top_array, coordinates = compute_top_indics(grad, num_change_pixels)
+    num_change_pixels = int(num_pixels * topr)
+    top_array, _ = compute_top_indics(grad, num_change_pixels)
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels
 
+def grad_mask_random(grad, randomk=10):
+    '''随机选择randomk个像素，其余值置为0,并返回被修改的pixel数'''
+    batch_size, _, height, width = grad.shape
+    grad_view = grad.view(batch_size, -1)  
+    mask = torch.zeros_like(grad_view)
+    for i in range(batch_size):
+        rand_indices = torch.randperm(grad_view.shape[1])[:randomk]
+        mask[i, rand_indices] = 1  # set the selected pixels to 1
+    mask = mask.view_as(grad)
+    return mask, randomk
+
 # -------------------- step3: 生成扰动 --------------------
-def generate_perturbations(attack_method, eta_list, masked_grad, **kwargs):
+def generate_perturbations(attack_method, eta_list, grad, **kwargs):
     '''生成扰动
     Args:
         attack_method: 攻击方法名称
         eta_list: 扰动的阈值
-        masked_grad: 掩码后的梯度
+        grad: 梯度
     Returns:
         perturbations: 扰动, [len(eta_list),batch_size, channel, height, width], tensor
     '''
@@ -102,28 +120,28 @@ def generate_perturbations(attack_method, eta_list, masked_grad, **kwargs):
         'fgm': fgm,
         'gaussian_noise': gaussian_noise
     }
-    perturbations = attack_dict[attack_method](eta_list, masked_grad, **kwargs)
+    perturbations = attack_dict[attack_method](eta_list, grad, **kwargs)
     return perturbations
 
-def fgsm(eta_list, masked_grad, **kwargs):
+def fgsm(eta_list, grad, **kwargs):
     '''Fast Gradient Sign Method
     Args:
         eta_list: 扰动的阈值
-        masked_grad: 掩码后的梯度
+        grad: 梯度
     Returns:
         perturbations: 扰动, [len(eta_list),batch_size, channel, height, width], tensor
     '''
-    perturbations = [eta * masked_grad.sign() for eta in eta_list]
+    perturbations = [eta * grad.sign() for eta in eta_list]
     return perturbations
 
-def fgm(eta_list, masked_grad, **kwargs):
+def fgm(eta_list, grad, **kwargs):
     '''Fast Gradient Method'''
-    batch_size = masked_grad.shape[0]
-    normed_grad =  torch.norm(masked_grad.view(batch_size, -1), p=2, dim=1)
-    perturbations = [eta * (masked_grad / normed_grad.view(-1, 1, 1, 1)) for eta in eta_list]
+    batch_size = grad.shape[0]
+    normed_grad =  torch.norm(grad.view(batch_size, -1), p=2, dim=1)
+    perturbations = [eta * (grad / normed_grad.view(-1, 1, 1, 1)) for eta in eta_list]
     return perturbations
 
-def gaussian_noise(eta_list, masked_grad, **kwargs):
+def gaussian_noise(eta_list, grad, **kwargs):
     '''高斯噪声
     fix:固定白噪声的pattern
         fix=True:先生成(0,1)正态分布standard_preturb,然后对每个eta,
@@ -131,11 +149,11 @@ def gaussian_noise(eta_list, masked_grad, **kwargs):
         fix=False:每个eta都随机生成一个（0，eta）的噪声
     '''
     fix = kwargs.get('fix', False)
-    standard_perturb = torch.randn_like(masked_grad)
+    standard_perturb = torch.randn_like(grad)
     if fix:
-        perturbations = [eta * standard_perturb for eta in eta_list]
+        perturbations = [torch.clamp(eta * standard_perturb, -eta, eta) for eta in eta_list]
     else:
-        perturbations = [torch.clamp(torch.randn_like(masked_grad), -eta, eta) for eta in eta_list]
+        perturbations = [torch.clamp(torch.randn_like(grad), -eta, eta) for eta in eta_list]
     return perturbations
     
 # -------------------- step4: 生成对抗样本 --------------------
@@ -170,13 +188,13 @@ if __name__ == '__main__':
     print(f'num_attacked: {num_attacked}')
     
     eta_list = np.arange(0, 0.2, 0.01)
-    grad_masked = grad * mask
-    print(f'grad_masked 大于0的个数: {grad_masked[grad_masked > 0].numel()}')
-    print(f'grad_masked 小于0的个数: {grad_masked[grad_masked < 0].numel()}')
-    perturbations = generate_perturbations('fgsm', eta_list, grad_masked)
+    # grad_masked = grad * mask
+ 
+    perturbations = generate_perturbations('fgsm', eta_list, grad)
+    perturbations = [perturbation * mask for perturbation in perturbations]
     adv_images = generate_adv_images(images, perturbations)
     for i, eta in enumerate(eta_list):
-        pred = model(adv_images[i]).argmax(dim=1)
+        pred = model(apply_normalization(adv_images[i])).argmax(dim=1)
         pred_classes = get_classes_with_index(pred)
         print(f'eta: {eta}, 攻击成功率: {(pred != labels).float().mean().item()}')
         titles = [f'{original} -> {pred}' if original != pred else original for original, pred in zip(original_classes, pred_classes)]

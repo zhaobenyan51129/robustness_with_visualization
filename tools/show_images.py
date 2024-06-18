@@ -35,14 +35,63 @@ def show_images(imgs, **kwargs):
     axes = axes.flatten()
     for i, (ax, image) in enumerate(zip(axes, imgs)):
         if torch.is_tensor(image): # tensor
-            image = image.cpu().numpy().transpose(1, 2, 0)
-        if image.dtype == np.float32 or image.dtype == np.float64:
-            image = (image - image.min()) / (image.max() - image.min())   
-            image = np.clip(image, 0, 1)
-        else:
-            image = np.clip(image, 0, 255)
+            image = image.detach().cpu().numpy().transpose(1, 2, 0)
+        image_min = image.min()
+        image_max = image.max()
+        image = (image - image_min) / (image_max - image_min)
+        if image.dtype != np.float32 and image.dtype != np.float64:
+            image = image * 255
+        # ax.imshow(image)
         ax.imshow(image)
         ax.axis("off")  
+        if titles is not None:
+            if '/' in titles[i]:
+                ax.set_title(titles[i], fontsize=8, color='red')
+            else:
+                ax.set_title(titles[i], fontsize=8)
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_path = os.path.join(output_path, save_name)
+        plt.savefig(output_path)
+        plt.close()
+    else:
+        plt.show()
+        
+def show_grad(imgs, **kwargs):
+    '''显示图片的梯度
+
+    Args:
+        imgs: 梯度[batch,3,224,224] tensor
+        kwargs: 包含以下可选参数的字典
+            titles: 标题， 长度与batch相等的list
+            output_path: 输出路径，如果不为None，则保存图片到指定路径
+            save_name: 保存的图片名
+            scale: 图片缩放比例，默认为1.5
+            main_title: 图片的大标题
+    '''
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', None)
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', None)
+    
+    batch_size = imgs.shape[0]
+    num_rows = int(np.ceil(np.sqrt(batch_size)))
+    num_cols = int(np.ceil(batch_size / num_rows))
+    figsize = (num_cols * scale, (num_rows) * scale)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig.suptitle(main_title, fontsize=16)
+    axes = axes.flatten()
+    for i, (ax, img) in enumerate(zip(axes, imgs)):
+        # 取三个通道的最大值
+        img = img.abs().max(dim=0)[0]
+        img = img.cpu().numpy()
+        img_min = img.min()
+        img_max = img.max()
+        img = (img - img_min) / (img_max - img_min)
+        ax.imshow(img, cmap='hot')
+        ax.axis("off")
         if titles is not None:
             ax.set_title(titles[i], fontsize=8)
     if output_path:
@@ -53,6 +102,7 @@ def show_images(imgs, **kwargs):
         plt.close()
     else:
         plt.show()
+        
 
 def plot_distribution(input, **kwargs): 
     '''显示分布
@@ -84,6 +134,7 @@ def plot_distribution(input, **kwargs):
         if torch.is_tensor(single_input):# tensor
             single_input = single_input.cpu().numpy()
         flattened_single_input = single_input.flatten()
+        flattened_single_input = np.log1p(np.abs(flattened_single_input))  # 对梯度进行对数变换
         sns.histplot(flattened_single_input, ax=ax, bins=50, kde=True, alpha=0.5)
         if titles is not None:
             ax.set_title(titles[i], fontsize=8)

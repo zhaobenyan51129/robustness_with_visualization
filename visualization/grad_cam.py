@@ -303,6 +303,7 @@ def center_crop_img(img: np.ndarray, size: int):
 
     return img
 
+
 def main():
     '''测试'''
     model_str = 'vit_b_16'
