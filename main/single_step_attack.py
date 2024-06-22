@@ -19,7 +19,6 @@ def make_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
     
-    
 def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cuda):
     '''运行Grad-CAM算法,并返回可视化结果和预测的类别
     Args:
@@ -34,7 +33,7 @@ def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cu
     _, grayscale_cam = cam(images, target_category=labels)
     img = images.permute(0, 2, 3, 1).detach().cpu().numpy()
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
-    return vis
+    return grayscale_cam, vis
 
 class OneStepAttack:
     def __init__(self, model_str, data_path, root):
@@ -46,12 +45,17 @@ class OneStepAttack:
         self.original_classes = get_classes_with_index(self.labels)
         self.grad = None
         self.adv_images = None
-        if 'vit' in model_str:
+        if model_str == 'vit_b_16':
             self.target_layers = [self.model.blocks[-1].norm1]
             self.reshape_transform = ReshapeTransform(self.model)
-        else:
-            self.target_layers = [self.model.encoder.layers[-1].ln_1]
+        elif model_str == 'resnet50':
+            self.target_layers = [self.model.layer4[-1].conv3]
             self.reshape_transform = None
+        elif model_str == 'vgg16':
+            self.target_layers = [self.model.features[-1]]
+            self.reshape_transform = None
+        else:
+            raise Exception('model_str error!')
         if torch.cuda.is_available():
             self.use_cuda = True
         else:
@@ -86,15 +90,21 @@ class OneStepAttack:
         '''
         titles = kwargs.get('titles', None)
         main_title = kwargs.get('main_title', None)
-        vis = run_grad_cam(self.model, input, self.labels, self.target_layers, self.reshape_transform, self.use_cuda)
+        grayscale_cam, vis = run_grad_cam(self.model, input, self.labels, self.target_layers, self.reshape_transform, self.use_cuda)
         show_images(vis, titles=titles, output_path=output_path, save_name=save_name, main_title=main_title)
 
     def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, **kwargs):
+        show = False # 是否展示图片
+        
         para = kwargs.get(mask_mode, None)
         if para is not None:
             save_path = os.path.join(self.root, algo, mask_mode, str(para))
         else:
             save_path = os.path.join(self.root, algo, mask_mode)
+            
+        if os.path.exists(save_path):
+            show = False
+        
         mask, num_attacked = grad_mask(self.grad, mode=mask_mode, **kwargs)
         print(f'algo: {algo}, mask_mode: {mask_mode}, num_attacked: {num_attacked}')
         
@@ -102,12 +112,13 @@ class OneStepAttack:
         perturbations = [perturbation * mask for perturbation in perturbations]
         self.adv_images = generate_adv_images(self.images, perturbations)
 
-        save_path_image = os.path.join(save_path, 'adv_images')
-        save_path_cam = os.path.join(save_path, 'grad_cam')
-        save_path_perb = os.path.join(save_path, 'perturbation')
-        make_dir(save_path_image)
-        make_dir(save_path_cam)
-        make_dir(save_path_perb)
+        if show:
+            save_path_image = os.path.join(save_path, 'adv_images')
+            save_path_cam = os.path.join(save_path, 'grad_cam')
+            save_path_perb = os.path.join(save_path, 'perturbation')
+            make_dir(save_path_image)
+            make_dir(save_path_cam)
+            make_dir(save_path_perb)
         
         success_rate_dict = {}
         for i, eta in enumerate(eta_list):
@@ -117,69 +128,77 @@ class OneStepAttack:
             success_rate_dict[eta] = success_rate
             print(f'eta: {eta}, success_rate: {success_rate:.2f}')
             
-            titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, pred_classes)]
-            main_title = f'{algo}, eta: {eta}, success_rato: {success_rate:.2f}'
+            if show:
+                titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, pred_classes)]
+                main_title = f'{algo}, eta: {eta}, success_rato: {success_rate:.2f}'
             
-            show_images(self.adv_images[i], output_path=save_path_image, save_name=f'{eta}.png', titles=titles, main_title=main_title)
+                show_images(self.adv_images[i], output_path=save_path_image, save_name=f'{round(eta,2)}.png', titles=titles, main_title=main_title)
             
-            self.show_grad_cam(self.adv_images[i], output_path=save_path_cam, save_name=f'{eta}.png', titles=titles, main_title=main_title)
+                self.show_grad_cam(self.adv_images[i], output_path=save_path_cam, save_name=f'{round(eta,2)}.png', titles=titles, main_title=main_title)
             
-            perturbation = perturbations[i].permute(0, 2, 3, 1).detach().cpu().numpy()
-            show_images(perturbation, output_path=save_path_perb, titles=titles, save_name=f'{eta}.png', main_title=main_title)
-            plot_distribution(perturbation, output_path=save_path_perb, save_name=f'distribution_{eta}.png')
+                perturbation = perturbations[i].permute(0, 2, 3, 1).detach().cpu().numpy()
+                show_images(perturbation, output_path=save_path_perb, titles=titles, save_name=f'{round(eta,2)}.png', main_title=main_title)
+                plot_distribution(perturbation, output_path=save_path_perb, save_name=f'distribution_{round(eta,2)}.png')
             
         return num_attacked, success_rate_dict
 
 if __name__ == '__main__':
-    root = './data/one_step_attack'
-    image_path = './data/images_100.pth'
-    attacker = OneStepAttack('vit_b_16', image_path, root)
-    attacker.compute_grad()
-    attacker.show_images_grad()
-
-    results = pd.DataFrame(columns=['algo', 'mask_mode', 'parameter', 'eta', 'num_attacked', 'success_rate'])
-
+  
+    results = pd.DataFrame(columns=['model','algo', 'mask_mode', 'parameter', 'eta', 'num_attacked', 'success_rate'])
     # 算法列表
     algo_list = ['fgsm', 'fgm', 'gaussian_noise']
+    eta_list = np.arange(0.01, 0.31, 0.01)
+    
     # algo_list = ['fgsm']
-    eta_list = np.arange(0.01, 0.11, 0.01)
     # eta_list = [0.1]
 
     # mask_mode列表和对应的参数范围
     mask_modes = {
-        'topk': range(100, 10001, 500),
-        'topr': np.arange(0, 0.1, 0.005),
+        'topk': range(100, 20001, 100),
+        'topr': np.arange(0.005, 0.5, 0.005),
         # 'topr': [0.1],
         # 'topk': [1000],
         'positive': [None],
         'negative': [None],
         'all': [None],
-        'randomk': range(100, 10001, 500),
+        'randomk': range(100, 20001, 100),
     }
-
-    # 遍历所有的算法和mask_mode
-    for algo in algo_list:
-        for mask_mode, parameters in mask_modes.items():
-            for parameter in parameters:
-                # 调用attack方法
-                if parameter is None:
-                    num_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)
-                else:
-                    num_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter})
-                
-                # 遍历返回的字典中的每一个eta和对应的成功率
-                for eta, success_rate in success_rate_dict.items():
-                    # 将结果保存到DataFrame中
-                    new_row = pd.DataFrame({
-                                'algo': [algo],
-                                'mask_mode': [mask_mode],
-                                'parameter': [parameter],
-                                'eta': [eta],
-                                'num_attacked': [num_attacked],
-                                'success_rate': [success_rate]
-                            })
-                    if results.empty:
-                        results = new_row
+    model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    single_root = './data/one_step_attack'
+    for model_str in model_list:
+        root = os.path.join(single_root, model_str)
+        make_dir(root)
+        
+        image_path = './data/images_new_100.pth'
+        attacker = OneStepAttack(model_str, image_path, root)
+        attacker.compute_grad()
+        # attacker.show_images_grad()
+        
+        for algo in algo_list:
+            for mask_mode, parameters in mask_modes.items():
+                for parameter in parameters:
+                    # 调用attack方法
+                    if parameter is None:
+                        num_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)
                     else:
-                        results = pd.concat([results, new_row], ignore_index=True)
-    results.to_excel(os.path.join(root, 'result.xlsx'), index=False)
+                        num_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter})
+                    
+                    # 遍历返回的字典中的每一个eta和对应的成功率
+                    for eta, success_rate in success_rate_dict.items():
+                        # 将结果保存到DataFrame中
+                        new_row = pd.DataFrame({
+                                    'model': [model_str],
+                                    'algo': [algo],
+                                    'mask_mode': [mask_mode],
+                                    'parameter': [parameter],
+                                    'eta': [eta],
+                                    'num_attacked': [num_attacked],
+                                    'success_rate': [success_rate]
+                                })
+                        if results.empty:
+                            results = new_row
+                        else:
+                            results = pd.concat([results, new_row], ignore_index=True)
+    results.to_excel(os.path.join(single_root, 'result_one_step.xlsx'), index=False)
+    # 释放显存
+    torch.cuda.empty_cache()

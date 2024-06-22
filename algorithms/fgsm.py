@@ -17,18 +17,7 @@ def fgsm(model, X, y, eta):
     loss.backward()
     grad = delta.grad.detach().clone()
     perturbation = eta * grad.sign()
-    # 下面是单张单张图片地处理
-    # loss_list = []
-    # grad_list = []
-    # for image, label in zip(X, y):
-    #     image = image.unsqueeze(0)
-    #     label = label.unsqueeze(0)
-    #     delta = torch.zeros_like(image, requires_grad=True)
-    #     loss = nn.CrossEntropyLoss()(model(image + delta), label)
-    #     loss.backward()
-    #     loss_list.append(loss.item())
-    #     grad_list.append(delta.grad.detach().clone())
-    # print(sum(loss_list)/len(loss_list))
+
     return perturbation
 
 

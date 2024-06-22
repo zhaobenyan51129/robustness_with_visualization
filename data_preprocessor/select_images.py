@@ -60,7 +60,7 @@ class SelectImageNet:
         dataloader = DataLoader(self.testset, batch_size=64, shuffle=True) # 长度是有多少个batch
         class_correct = list(0. for i in range(len(self.testset.classes)))
         class_total = list(0. for i in range(len(self.testset.classes)))
-        model = self.models[0].to(self.device) 
+        model = self.models[0].to(self.device) # 只用第一个模型计算准确率
         with torch.no_grad():
             for images, labels in tqdm(dataloader):
                 outputs = model(images.to(self.device))
@@ -86,17 +86,17 @@ class SelectImageNet:
         preds = labels + 1 # [100, ][1,1,...,1]
         preds = preds.to(self.device)
         while preds.ne(labels).sum() > 0: # 如果预测值和label不相等的个数不为0 ne:不相等返回1
-            idx = torch.arange(0, images.size(0)).long().to(self.device)[preds.ne(labels)] # 计算没预测对的的位置， .long-> torch.int64
+            idx = torch.arange(0, images.size(0)).long().to(self.device)[preds.ne(labels)] # 计算没预测对的的位置
             for i in list(idx):
                 images[i], labels[i] = self.testset[random.randint(0, len(self.testset) - 1)] # 0~49999
             pred_labels = []
             for model in self.models:
                 pred_label, _ = self.get_preds(model, images[idx])
                 pred_labels.append(pred_label)
-                if len(set(pred_labels)) > 1: # 如果所有模型预测得不一样，则跳出循环，重新选图片
-                    break
-                else: # 如果所有模型都预测的一样，则保存
-                    preds[idx] = pred_labels[0]
+            # 如果所有模型都预测正确，则将preds中对应位置设置为预测值
+            for i, num in enumerate(idx):
+                if all([pred_label[i] == labels[num] for pred_label in pred_labels]):
+                    preds[num] = labels[num]
         torch.save({'images': images, 'labels': labels}, save_path)
         
     def load_select_images(self, num_images_per_class, class_list, save_path):
@@ -145,15 +145,16 @@ class SelectImageNet:
 
 def main():
     '''测试'''
-    # model1 = load_model('resnet50')
-    model2 = load_model('vit_b_16')
-    # models = [model1, model2]
-    models = [model2]
+    # 
+    model1 = load_model('vit_b_16')
+    model2 = load_model('resnet50')
+    model3 = load_model('vgg16')
+    models = [model1, model2, model3]
     
     imagenet_root = '../imagenet'       
     data_dir = './data'
     select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=100, image_size=224)
-    select.creat_image_file(os.path.join(data_dir, 'images_100.pth'))
+    select.creat_image_file(os.path.join(data_dir, 'images_new_100.pth'))
     # select.get_classes_acc(os.path.join(data_dir, 'class_acc.json'))
 
 def main_generate_data():
@@ -168,5 +169,5 @@ def main_generate_data():
     
      
 if __name__ == '__main__':
-    # main()
-    main_generate_data()
+    main()
+    # main_generate_data()

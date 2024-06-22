@@ -11,6 +11,14 @@
             "program": "${workspaceFolder}/main/single_step_attack.py",
             "python": "/root/miniconda3/bin/python",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "select_images.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/data_preprocessor/select_images.py",
+            "python": "/root/miniconda3/bin/python",
+            "console": "integratedTerminal"
         }
             
         

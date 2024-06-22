@@ -32,36 +32,36 @@ def compute_top_indics(X, top_num=10):
             top_array[i].flat[top_indices] = 1  
         else:
             print('不支持的维度')
+    top_array = distribute_values_to_channels(top_array)
     return top_array, coordinates
 
-# def compute_top_indics(X, top_num=10):
-#     '''计算输入数组的前n大的值和位置
-#     Args:
-#         X: 输入数组，shape: (batch, 224, 224, 3) or (batch, 224,224), tensor or numpy array
-#         top_num: 前n大的值
-#     return: 
-#         top_array: tensor[batch, 3, 224,224] or [batch, 224,224] ，前n大的值为1，其余为0
-#         coordinates: 前n大值的位置, tensor, shape: (batch, top_num, dim - 1)
-#     '''
-#     if isinstance(X, np.ndarray):
-#         X = torch.from_numpy(X)
-#     elif isinstance(X, torch.Tensor):
-#         X = X.detach().cpu()
-#     else:
-#         raise TypeError("X must be a numpy array or a PyTorch tensor.")
-    
-#     batch = X.shape[0]
-#     dim = X.dim()
-#     top_array = torch.zeros_like(X, dtype=torch.int)
-#     coordinates = torch.zeros((batch, top_num, dim - 1), dtype=torch.int)
-    
-#     for i in range(batch):
-#         flattened_image = X[i].view(-1)
-#         top_indices = torch.topk(flattened_image, top_num)[1]
-#         coordinates[i] = torch.stack(torch.unravel_index(top_indices, X.shape[1:])).T
-#         top_array[i].view(-1)[top_indices] = 1 
+def distribute_values_to_channels(top_array):
+    '''如果top_array的形状为[batch, 224, 224]，将top_array的值复制到3个通道中'''
+    if len(top_array.shape) == 4:
+        return top_array
+    output_array = np.repeat(top_array[:, np.newaxis, :, :], 3, axis=1)
+    return output_array
 
-#     if dim == 4:
-#         top_array = top_array.permute(0,3,1,2)
+def distribute_values_to_channels_random(top_array):
+    '''如果top_array的形状为[batch, 224, 224] 将top_array的值随机分配到3个通道中'''
+    if len(top_array.shape) == 4:
+        return top_array
+    batch_size = top_array.shape[0]
+    height = top_array.shape[1]
+    width = top_array.shape[2]
+    # 步骤1: 创建输出数组
+    output_array = np.zeros((batch_size, 3, height, width), dtype=top_array.dtype)
     
-#     return top_array, coordinates
+    # 遍历每个批次和每个位置
+    for b in range(batch_size):
+        for i in range(height):
+            for j in range(width):
+                # 随机选择一个通道
+                channel = np.random.randint(0, 3)
+                # 将原始数组的值赋给选中的通道
+                output_array[b, channel, i, j] = top_array[b, i, j]
+                
+    return output_array
+
+import numpy as np
+

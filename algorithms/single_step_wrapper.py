@@ -8,9 +8,10 @@ print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from tools.compute_topk import compute_top_indics
 from tools.get_classes import get_classes_with_index
-from tools.show_images import show_images, plot_distribution
+from tools.show_images import show_images
 from models.load_model import load_model
 from data_preprocessor.normalize import apply_normalization
+from visualization.grad_cam import GradCAM, show_cam_on_image
 
 
 if torch.cuda.is_available():
@@ -59,7 +60,8 @@ def grad_mask(grad, mode = None, **kwargs):
         'negative': grad_mask_negative,
         'topk': grad_mask_topk,
         'topr': grad_mask_topr,
-        'randomk': grad_mask_random
+        'randomk': grad_mask_random,
+        'randomr': grad_mask_randomr
     }
     mask, num_attacked = mode_dict[mode](grad, **kwargs)
     return mask, num_attacked
@@ -105,6 +107,42 @@ def grad_mask_random(grad, randomk=10):
     mask = mask.view_as(grad)
     return mask, randomk
 
+def grad_mask_randomr(grad, randomr=0.1):
+    '''随机选择randomr比例的像素，其余值置为0,并返回被修改的pixel数'''
+    batch_size, _, height, width = grad.shape
+    grad_view = grad.view(batch_size, -1)  
+    mask = torch.zeros_like(grad_view)
+    for i in range(batch_size):
+        num_change_pixels = int(grad_view.shape[1] * randomr)
+        rand_indices = torch.randperm(grad_view.shape[1])[:num_change_pixels]
+        mask[i, rand_indices] = 1  # set the selected pixels to 1
+    mask = mask.view_as(grad)
+    return mask, num_change_pixels
+
+def cam_mask_topk(grayscale_cam, camtopk = 10):
+    '''topk为改变的pixel的个数，cam绝对值前topk个为1，其余为0
+    Args:
+        grayscale_cam: cam图, 形状为[batch_size, height, width]
+    '''
+    cam = grayscale_cam.abs()
+    # 将camtopk除以3并向上取整，因为cam是三通道的
+    camtopk = int(camtopk / 3)
+    top_array, _ = compute_top_indics(cam, camtopk)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, camtopk
+
+def cam_mask_topr(grayscale_cam, camtopr = 0.1):
+    '''topr为改变的pixel的比例，cam绝对值前topr比例的为1，其余为0
+    Args:
+        grayscale_cam: cam图, 形状为[batch_size, height, width]
+    '''
+    cam = grayscale_cam.abs()
+    num_pixels = cam[0].numel()
+    num_change_pixels = int(num_pixels * camtopr) 
+    top_array, _ = compute_top_indics(cam, num_change_pixels)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels
+
 # -------------------- step3: 生成扰动 --------------------
 def generate_perturbations(attack_method, eta_list, grad, **kwargs):
     '''生成扰动
@@ -148,6 +186,7 @@ def gaussian_noise(eta_list, grad, **kwargs):
         用eta乘这个standard_preturb作为噪声（每个噪声值相差一个倍数）
         fix=False:每个eta都随机生成一个（0，eta）的噪声
     '''
+    torch.manual_seed(0) # 固定随机种子
     fix = kwargs.get('fix', False)
     standard_perturb = torch.randn_like(grad)
     if fix:

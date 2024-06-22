@@ -1,6 +1,6 @@
 '''加载模型'''
 import torch
-from torchvision.models import resnet34, resnet50, resnet101, resnet152, vit_b_32, vit_l_32, vit_b_16, vit_l_16
+from torchvision.models import resnet34, resnet50, resnet101, resnet152, vit_b_32, vit_l_32, vit_b_16, vit_l_16, vgg16
 import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +34,8 @@ def load_model(model_str):
         # model = vit_b_16(weights='ViT_B_16_Weights.IMAGENET1K_V1')
     elif model_str == 'vit_l_16':
         model = vit_l_16(weights='ViT_L_16_Weights.IMAGENET1K_V1') 
+    elif model_str == 'vgg16':
+        model = vgg16(weights='VGG16_Weights.IMAGENET1K_V1')
     else:
         raise Exception('model_str error!')
     model.eval()
