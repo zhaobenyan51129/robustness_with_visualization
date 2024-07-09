@@ -42,15 +42,17 @@ class SelectImageNet:
         self.device = device
 
     def get_preds(self, model, X):
-        '''获取指定模型的预测结果
+        '''获取指定模型的预测结果,按batch计算
 
         Args:
             model: 模型， 
             X: 图片数据， [b, 224, 224, 3]
         '''
-        X = X.to(self.device)
-        max_value_and_idx = model(X).max(dim=1) 
-        return max_value_and_idx[1], max_value_and_idx[0] # 获得预测的label和对应概率
+        model.eval()
+        with torch.no_grad():
+            X = X.to(self.device)
+            max_value_and_idx = model(X).max(dim=1) 
+            return max_value_and_idx[1], max_value_and_idx[0]
     
     def get_classes_acc(self, save_path):
         '''计算模型在验证集的每个类别上的准确率，保存为json文件
@@ -153,8 +155,8 @@ def main():
     
     imagenet_root = '../imagenet'       
     data_dir = './data'
-    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=100, image_size=224)
-    select.creat_image_file(os.path.join(data_dir, 'images_new_100.pth'))
+    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=900, image_size=224)
+    select.creat_image_file(os.path.join(data_dir, 'images_900.pth'))
     # select.get_classes_acc(os.path.join(data_dir, 'class_acc.json'))
 
 def main_generate_data():
