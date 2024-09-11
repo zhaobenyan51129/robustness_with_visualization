@@ -37,12 +37,13 @@ def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cu
     return grayscale_cam, vis
 
 class OneStepAttack:
-    def __init__(self, model_str, images, labels, root):
+    def __init__(self, model_str, images, labels, root, show=False):
         self.model_str = model_str
         self.model = load_model(model_str)
         self.root = root
         self.images = images
         self.labels = labels
+        self.show = show
         self.original_classes = get_classes_with_index(self.labels)
         self.grad = None
         self.adv_images = None
@@ -51,6 +52,7 @@ class OneStepAttack:
             self.reshape_transform = ReshapeTransform(self.model)
         elif model_str == 'resnet50':
             self.target_layers = [self.model.layer4[-1].conv3]
+            # self.target_layers = [self.model.layer4[-1]]
             self.reshape_transform = None
         elif model_str == 'vgg16':
             self.target_layers = [self.model.features[-1]]
@@ -75,7 +77,7 @@ class OneStepAttack:
         show_images(self.images, titles=self.original_classes, output_path=self.root, save_name='original.png')
         show_grad(self.grad, output_path=self.root, save_name='grad.png')
         plot_distribution(self.grad, output_path=self.root, save_name='grad_distribution.png')
-        show_images(self.vis, output_path=self.root, save_name='grad_cam_ori.png')
+        show_images(self.vis, titles=self.original_classes, output_path=self.root, save_name='grad_cam_ori.png')
 
     def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, **kwargs):
         # 是否展示图片
@@ -87,7 +89,7 @@ class OneStepAttack:
             save_path = os.path.join(self.root, algo, mask_mode)
             
         if os.path.exists(save_path):
-            show = False
+            self.show = False
         if mask_mode in ['cam_topk', 'cam_topr']:
             mask, num_attacked = cam_mask(self.grayscale_cam, mode=mask_mode, **kwargs)
         else:
@@ -103,7 +105,7 @@ class OneStepAttack:
         perturbations = [perturbation * mask for perturbation in perturbations]
         self.adv_images = generate_adv_images(self.images, perturbations)
 
-        if show:
+        if self.show:
             save_path_image = os.path.join(save_path, 'adv_images')
             save_path_cam = os.path.join(save_path, 'grad_cam')
             save_path_perb = os.path.join(save_path, 'perturbation')
@@ -118,9 +120,9 @@ class OneStepAttack:
             success_rate = (pred != self.labels).float().mean().item()
             success_rate_dict[eta] = success_rate
             
-            if show:
+            if self.show:
                 titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, pred_classes)]
-                main_title = f'{algo}, eta: {eta}, success_rato: {success_rate:.2f}'
+                main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}'
             
                 show_images(self.adv_images[i], output_path=save_path_image, save_name=f'{round(eta,2)}.png', titles=titles, main_title=main_title)
                 
@@ -193,7 +195,7 @@ def main():
         # image_path = './data/images_new_100.pth'
         image_path = './data/images_900.pth'
         images, labels = load_data(image_path)
-        attacker = OneStepAttack(model_str, images, labels, root)
+        attacker = OneStepAttack(model_str, images, labels, root, show)
         attacker.compute_grad_and_cam()
         # attacker.show_images_grad()
         
@@ -235,7 +237,7 @@ def main_batch():
     results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'num_attacked', 'numlocate', 'success_rate', 'run_time', 'batch'])
     # algo_list, eta_list, mask_modes, model_list, single_root = parameter_sample()
     algo_list, eta_list, mask_modes, model_list, single_root = parameter_test()
-    
+    show = False
     batch_size = 100
     for model_str in model_list:
         image_path = './data/images_900.pth'
@@ -250,7 +252,7 @@ def main_batch():
             images_batch = images[start_idx:end_idx]
             labels_batch = labels[start_idx:end_idx]
             
-            attacker = OneStepAttack(model_str, images_batch, labels_batch, root)
+            attacker = OneStepAttack(model_str, images_batch, labels_batch, root, show)
             attacker.compute_grad_and_cam()
             # attacker.show_images_grad()
      

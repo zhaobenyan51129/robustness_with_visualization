@@ -234,7 +234,7 @@ def cam_mask_topr(grayscale_cam, cam_topr = 0.1):
     '''
     cam = np.abs(grayscale_cam)
     num_pixels = cam[0].size
-    num_change_pixels = int(num_pixels * cam_topr * 3) 
+    num_change_pixels = int(num_pixels * cam_topr * 3) # *3是因为三个通道
     top_array, _ = compute_top_indics(cam, num_change_pixels)
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels

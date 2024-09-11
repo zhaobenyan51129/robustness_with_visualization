@@ -2,6 +2,8 @@
 import torch
 import torch.nn as nn
 import sys
+import pandas as pd
+from tqdm import tqdm
 import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 print(BASE_DIR)
@@ -23,7 +25,13 @@ print(f'device: {device}')
 def make_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
-    
+
+def load_data(data_path):
+    '''加载数据'''
+    data = torch.load(data_path)
+    images, labels = data['images'], data['labels']
+    return images, labels
+
 def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cuda):
     '''运行Grad-CAM算法,并返回可视化结果和预测的类别
     Args:
@@ -88,8 +96,8 @@ class MultiStepAttack:
         """
         delta = torch.zeros_like(self.images, requires_grad=True)
         success_rate_dict = {}
-        for t in range(num_steps):
-            output = self.model(apply_normalization(self.images + delta))
+        for t in tqdm(range(num_steps), desc="Processing steps"):
+            output = self.model(self.images + delta)
             pred = output.argmax(dim=1)
             success_rate = (pred != self.labels).float().mean().item()
             success_rate_dict[t] = success_rate
@@ -103,7 +111,7 @@ class MultiStepAttack:
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
             delta.data = delta + alpha * mask * grad.sign()
-            delta.data = torch.clamp(delta, -eta, eta)
+            delta.data = torch.clamp(delta.data, -eta, eta)
             delta.grad.zero_()  
             
         return delta, success_rate_dict
@@ -122,25 +130,50 @@ class MultiStepAttack:
         """
         delta = torch.zeros_like(self.images, requires_grad=True)
         success_rate_dict = {}
-        for t in range(num_steps):
-            output = self.model(apply_normalization(self.images + delta))
+        for t in tqdm(range(num_steps), desc="Processing steps"):
+            output = self.model(self.images + delta)
             pred = output.argmax(dim=1)
             success_rate = (pred != self.labels).float().mean().item()
             success_rate_dict[t] = success_rate
             
-            loss = self.compute_loss_function(output, self.labels, loss_mode)
-            loss.backward()
-            grad = delta.grad.detach().clone()
             if mask_mode == 'cam_topr':
                 grayscale_cam, _ = run_grad_cam(self.model, self.images, self.labels, self.target_layers, self.reshape_transform, self.use_cuda)
                 mask, _ = cam_mask(grayscale_cam, mode=mask_mode, **kwargs)
             else:
+                loss = self.compute_loss_function(output, self.labels, loss_mode)
+                loss.backward()
+                grad = delta.grad.detach().clone()
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
-            delta.data = delta + alpha * mask * torch.randn_like(grad)
-            delta.data = torch.clamp(delta, -eta, eta)
+            delta.data = delta + alpha * mask * torch.randn_like(grad) # Gaussian noise
+            delta.data = torch.clamp(delta.data, -eta, eta)
             delta.grad.zero_()  
             
         return delta, success_rate_dict
+
+if __name__ == "__main__":
+    model_str = 'vit_b_16'
+    image_path = f'./data/imges_classified/14.pth'
+    images, labels = load_data(image_path)
+    images = images.to(device)
+    labels = labels.to(device)
+    root = './data/multi_step_attack_test'
+    make_dir(root)
+    attacker = MultiStepAttack(model_str, images, labels, root)
+    
+    delta, success_rate_dict = attacker.i_fgsm(alpha=0.02, eta=0.1, num_steps=10, mask_mode='all')
+    torch.save(delta, './data/multi_step_attack_test/delta_ifgsm.pth')
+
+    success_rate_df = pd.DataFrame(list(success_rate_dict.items()), columns=['Step', 'Success Rate'])
+    success_rate_df.to_excel(os.path.join(root, 'success_rate_dict_ifgsm.xlsx'), index=False)
+    print(delta.shape)
+    print('ifgsm done!')
+    
+    delta, success_rate_dict = attacker.i_gauss(alpha=1, eta=0.1, num_steps=10, mask_mode='all')
+    torch.save(delta, './data/multi_step_attack_test/delta_igauss.pth')
+    success_rate_df = pd.DataFrame(list(success_rate_dict.items()), columns=['Step', 'Success Rate'])
+    success_rate_df.to_excel(os.path.join(root, 'success_rate_dict_igauss.xlsx'), index=False)
+    print(delta.shape)
+    print('igauss done!')
 
 
 

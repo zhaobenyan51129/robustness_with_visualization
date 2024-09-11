@@ -34,8 +34,9 @@ class SelectImageNet:
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
+        # self.testset = datasets.ImageFolder(imagenet_root + '/val')
         self.testset = datasets.ImageFolder(imagenet_root + '/val', self.transform)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f'Using device {device}')
@@ -142,7 +143,6 @@ class SelectImageNet:
             # 将图片和标签转化为tensor并保存
             images = torch.stack(images)
             labels = torch.tensor([int(class_id)] * len(images))
-            
             torch.save({'images': images, 'labels': labels}, os.path.join(save_path, f'{class_id}.pth'))
 
 def main():
@@ -155,8 +155,8 @@ def main():
     
     imagenet_root = '../imagenet'       
     data_dir = './data'
-    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=900, image_size=224)
-    select.creat_image_file(os.path.join(data_dir, 'images_900.pth'))
+    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=100, image_size=224)
+    select.creat_image_file(os.path.join(data_dir, 'images_100_0911.pth'))
     # select.get_classes_acc(os.path.join(data_dir, 'class_acc.json'))
 
 def main_generate_data():
