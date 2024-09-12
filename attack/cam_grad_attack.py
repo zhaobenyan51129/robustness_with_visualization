@@ -139,7 +139,7 @@ class Attack:
         noise = np.random.normal(loc=0.0, scale= self.ratio, size = input.shape)
         if self.mask == 'cam' or self.mask == 'grad':
             dim = np.ndim(feature_array)
-            top_array, _ = compute_top_indics(feature_array, self.num)
+            top_array = compute_top_indics(feature_array, self.num)
             if dim == 3:
                 attacked_tensor = self.add_grey_to_channel(top_array, input).float()
             elif dim == 4:

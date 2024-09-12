@@ -119,7 +119,7 @@ class AdversarialAttacksMultiStep(object):
         gradient = self.get_grad()  
         # abs_grad = torch.abs(gradient)
         grad_np = gradient.cpu().numpy().transpose(0, 2, 3, 1)
-        top_array, top_indices = compute_top_indics(grad_np, top_num=k)
+        top_array = compute_top_indics(grad_np, top_num=k)
         top_tensor = torch.from_numpy(top_array).cuda()
         topk_grad = torch.mul(top_tensor, gradient)
         return topk_grad

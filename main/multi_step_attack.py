@@ -110,7 +110,7 @@ class MultiStepAttack:
                 mask, _ = cam_mask(grayscale_cam, mode=mask_mode, **kwargs)
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
-            delta.data = delta + alpha * mask * grad.sign()
+            delta.data = delta.data + alpha * mask * grad.sign()
             delta.data = torch.clamp(delta.data, -eta, eta)
             delta.grad.zero_()  
             

@@ -61,4 +61,19 @@ def get_classes_with_index(index):
     predicted_classes = [class_index_dict[str(i.item())][1] for i in index]
 
     return predicted_classes
+
+def get_chinese_classes_with_index(index):
+    '''根据预测类别的index，返回类别的中文名称
+    
+    Args:
+        index: 预测类别的index
+    Return:
+        predicted_classes: 预测类别的名称
+    '''
+    with open('./data/chinese_class_index.json') as f:
+        chinese_class_index = json.load(f)
+    predicted_classes = [chinese_class_index[str(i.item())] for i in index]
+    return predicted_classes
+
+
     

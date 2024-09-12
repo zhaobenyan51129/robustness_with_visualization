@@ -3,10 +3,12 @@
 import math
 import os
 from matplotlib import pyplot as plt
-from matplotlib.ticker import LogLocator, ScalarFormatter
 import numpy as np
 import torch
 import seaborn as sns
+
+# import matplotlib
+# matplotlib.rc("font", family='DejaVu Sans Mono')
 
 def show_images(imgs, **kwargs):
     '''显示图片
@@ -38,11 +40,54 @@ def show_images(imgs, **kwargs):
             image = image.detach().cpu().numpy().transpose(1, 2, 0)
         image_min = image.min()
         image_max = image.max()
-        image = (image - image_min) / (image_max - image_min)
+        image = (image - image_min) / (image_max - image_min) # 归一化到0-1，否则imshow会报错
         if image.dtype != np.float32 and image.dtype != np.float64:
             image = image * 255
         # ax.imshow(image)
         ax.imshow(image)
+        ax.axis("off")  
+        if titles is not None:
+            if '/' in titles[i]:
+                ax.set_title(titles[i], fontsize=8, color='red')
+            else:
+                ax.set_title(titles[i], fontsize=8)
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_path = os.path.join(output_path, save_name)
+        plt.savefig(output_path)
+        plt.close()
+    else:
+        plt.show()
+        
+def show_mask(mask, **kwargs):
+    '''显示mask
+    mask: [batch, 3, 224, 224]， [batch, 224,224] numpy array or tensor, 1表示mask的区域
+    **kwargs: 包含以下可选参数的字典
+        titles: 标题， 长度与batch相等的list
+        output_path: 输出路径，如果不为None，则保存图片到指定路径
+        save_name: 保存的图片名
+        scale: 图片缩放比例，默认为1.5
+        main_title: 图片的大标题
+        
+    '''
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', None)
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', None)
+
+    batch_size = mask.shape[0]
+    num_rows = int(np.ceil(np.sqrt(batch_size)))
+    num_cols = int(np.ceil(batch_size / num_rows))
+    figsize = (num_cols * scale, (num_rows) * scale)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig.suptitle(main_title, fontsize=16) 
+    axes = axes.flatten()
+    for i, (ax, image) in enumerate(zip(axes, mask)):
+        if torch.is_tensor(image): # tensor
+            image = image.detach().cpu().numpy().transpose(1, 2, 0)
+        ax.imshow(image, cmap='hot')
         ax.axis("off")  
         if titles is not None:
             if '/' in titles[i]:
@@ -178,7 +223,23 @@ def plot_line_chart(x, y, output_path = None, save_name = None, title = None):
         plt.close()
     else:
         plt.show()
-
+        
+def show_mask(mask, **kwargs):
+    '''显示mask
+    mask: [batch, 3, 224, 224]， [batch, 224,224] numpy array or tensor, 1表示mask的区域
+    **kwargs: 包含以下可选参数的字典
+        titles: 标题， 长度与batch相等的list
+        output_path: 输出路径，如果不为None，则保存图片到指定路径
+        save_name: 保存的图片名
+        scale: 图片缩放比例，默认为1.5
+        main_title: 图片的大标题
+        
+    '''
+    plt.imshow(mask, cmap='hot')
+    plt.axis('off')
+    plt.show()
+    
+    
 if __name__ == '__main__':
     import sys
     sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
@@ -186,4 +247,4 @@ if __name__ == '__main__':
     from tools.get_classes import get_classes_with_index
     images, labels = load_images('./select_images.pth')
     classes = get_classes_with_index(labels)
-    plot_distrubution(images, titles=classes, output_path='./data/show_images', save_name='distrubution.png')
+    # plot_distrubution(images, titles=classes, output_path='./data/show_images', save_name='distrubution.png')

@@ -125,7 +125,7 @@ class CamAttack:
             noise = np.random.normal(loc=0.0, scale= self.ratio, size = input.shape)
 
         if grayscale_cam is not None:
-            top_array, _ = compute_top_indics(grayscale_cam, self.num)
+            top_array = compute_top_indics(grayscale_cam, self.num)
             attacked_tensor = self.add_grey_to_channel(top_array, input).float()
         else: # 随机攻击
             mask = np.zeros(input.shape)

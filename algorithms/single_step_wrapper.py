@@ -12,7 +12,7 @@ from tools.compute_topk import compute_top_indics
 from tools.show_images import show_grad
 from tools.get_classes import get_classes_with_index
 from models.load_model import load_model
-from data_preprocessor.normalize import apply_normalization
+# from data_preprocessor.normalize import apply_normalization
 
 
 if torch.cuda.is_available():
@@ -23,7 +23,7 @@ print(f'device: {device}')
 
 # -------------------- step1: 计算梯度 --------------------
 def compute_grad(model, X, y):
-    '''计算loss对输入的梯度
+    '''计算loss对输入的梯度, 对x和对delta求梯度结果是一样的
     Args:
         model: 模型
         X: 图片
@@ -35,7 +35,7 @@ def compute_grad(model, X, y):
     y = y.to(device)
     model.zero_grad()
     delta = torch.zeros_like(X, requires_grad=True).to(device)
-    output = model(apply_normalization(X + delta))
+    output = model(X + delta)
     loss = nn.CrossEntropyLoss()(output, y)
     loss.backward()
     grad = delta.grad.detach().clone()
@@ -62,7 +62,7 @@ def compute_logit_grad(model, X, y):
     y = y.to(device)
     model.zero_grad()
     delta = torch.zeros_like(X, requires_grad=True).to(device)
-    output = model(apply_normalization(X + delta))
+    output = model(X + delta)
     logit = get_loss(output, y)
     logit.backward()
     grad = delta.grad.detach().clone()
@@ -76,7 +76,7 @@ def compute_output_grad(model, X, y):
     y = y.to(device)
     model.zero_grad()
     delta = torch.zeros_like(X, requires_grad=True).to(device)
-    output = model(apply_normalization(X + delta))
+    output = model(X + delta)
     output = nn.Softmax(dim=1)(output)
     softmax_loss = get_loss(output, y)
     softmax_loss.backward()
@@ -90,28 +90,25 @@ def grad_mask(grad, mode = None, **kwargs):
         'all': 返回全为1的掩码
         'positive': 梯度的正值为1，负值为0
         'negative': 梯度的负值为1，正值为0
-        'topk':前k个梯度的绝对值为1，其余为0，需要传入参数topk
         'topr':r为改变的pixel的比例，需要传入参数topr
-        'randomk':随机选择randomk个像素，其余值置为0
         'randomr':随机选择randomr比例的像素，其余值置为0
-        'channel_randomk':随机选择randomk个像素，但是3个通道最多只能有一个通道为1
         'channel_randomr':随机选择randomr比例的像素，但是3个通道最多只能有一个通道为1
-        
+    Return:
+        mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
+        num_attacked: 要修改的像素数
     '''
     if mode == 'all' or mode is None:
         mask = torch.ones_like(grad)
         batchsize = mask.shape[0]
-        num_attacked = mask.numel()//batchsize
+        num_attacked = mask.numel()//batchsize # 每张图片平均被修改的像素数
         return mask, num_attacked
     
     mode_dict = {
         'positive': grad_mask_positive,
         'negative': grad_mask_negative,
-        'topk': grad_mask_topk,
         'topr': grad_mask_topr,
-        'randomk': grad_mask_randomk,
+        'lowr': grad_mask_lowr,
         'randomr': grad_mask_randomr,
-        'channel_randomk': grad_mask_channel_randomk,
         'channel_randomr': grad_mask_channel_randomr,
     }
     mask, num_attacked = mode_dict[mode](grad, **kwargs)
@@ -120,13 +117,12 @@ def grad_mask(grad, mode = None, **kwargs):
 def cam_mask(grayscale_cam, mode, **kwargs):
     '''对cam进行掩码处理，生成于原始cam相同形状的掩码，用于标记要修改的像素
     Args:mode
-        'cam_topk':前k个cam的绝对值为1，其余为0，需要传入参数k
         'cam_topr':r为改变的pixel的比例，需要传入参数r
     '''
     
     mode_dict = {
-        'cam_topk': cam_mask_topk,
-        'cam_topr': cam_mask_topr
+        'cam_topr': cam_mask_topr,
+        'cam_lowr': cam_mask_lowr,
     }
     mask, num_attacked = mode_dict[mode](grayscale_cam, **kwargs)
     return mask, num_attacked
@@ -150,56 +146,35 @@ def grad_mask_negative(grad):
     mask = - negative_grad.sign()
     return mask, num_negative
 
-def grad_mask_topk(grad, topk = 10):
-    '''topk为改变的pixel的个数，梯度绝对值前topk个为1，其余为0'''
-    grad = grad.abs()
-    top_array, _ = compute_top_indics(grad, topk)
-    mask = torch.Tensor(top_array).to(device)
-    return mask, topk
-
 def grad_mask_topr(grad, topr = 0.1):
     '''topr为改变的pixel的比例，梯度绝对值前topr比例的为1，其余为0'''
     grad = grad.abs()
     num_pixels = grad[0].numel()
     num_change_pixels = int(num_pixels * topr)
-    top_array, _ = compute_top_indics(grad, num_change_pixels)
+    top_array = compute_top_indics(grad, num_change_pixels)
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels
 
-def grad_mask_randomk(grad, randomk=10):
-    '''随机选择randomk个像素，其余值置为0,并返回被修改的pixel数'''
-    batch_size, _, height, width = grad.shape
-    grad_view = grad.view(batch_size, -1)  
-    mask = torch.zeros_like(grad_view)
-    for i in range(batch_size):
-        rand_indices = torch.randperm(grad_view.shape[1])[:randomk]
-        mask[i, rand_indices] = 1  # set the selected pixels to 1
-    mask = mask.view_as(grad)
-    return mask, randomk
+def grad_mask_lowr(grad, lowr = 0.1):
+    '''lowr为改变的pixel的比例，梯度绝对值后lowr比例的为1，其余为0'''
+    grad = grad.abs()
+    num_pixels = grad[0].numel()
+    num_change_pixels = int(num_pixels * lowr)
+    top_array = compute_top_indics(grad, num_change_pixels, ascending=True)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels
 
 def grad_mask_randomr(grad, randomr=0.1):
     '''随机选择randomr比例的像素，其余值置为0,并返回被修改的pixel数'''
-    batch_size, _, height, width = grad.shape
+    batch_size = grad.shape[0]
     grad_view = grad.view(batch_size, -1)  
     mask = torch.zeros_like(grad_view)
+    num_change_pixels = int(grad_view.shape[1] * randomr)
     for i in range(batch_size):
-        num_change_pixels = int(grad_view.shape[1] * randomr)
         rand_indices = torch.randperm(grad_view.shape[1])[:num_change_pixels]
         mask[i, rand_indices] = 1  # set the selected pixels to 1
     mask = mask.view_as(grad)
     return mask, num_change_pixels
-
-def grad_mask_channel_randomk(grad, channel_randomk=10):
-    '''随机选择randomk个像素，但是3个通道最多只能有一个通道为1'''
-    batch_size, channels, height, width = grad.shape
-    mask = torch.zeros_like(grad)
-    num_pixels = height * width
-    for i in range(batch_size):
-        rand_pixels = torch.randperm(num_pixels)[:channel_randomk]
-        for pixel in rand_pixels:
-            rand_channel = torch.randint(0, channels, (1,))
-            mask[i, rand_channel, pixel // width, pixel % width] = 1
-    return mask, channel_randomk
 
 def grad_mask_channel_randomr(grad, channel_randomr=0.1):
     '''随机选择randomr比例的像素，但是3个通道最多只能有一个通道为1'''
@@ -214,28 +189,35 @@ def grad_mask_channel_randomr(grad, channel_randomr=0.1):
             mask[i, rand_channel, pixel // width, pixel % width] = 1
     return mask, num_change_pixels
 
-def cam_mask_topk(grayscale_cam, cam_topk = 10):
-    '''topk为改变的pixel的个数，cam绝对值前topk个为1，其余为0,在三个通道中随机选一个通道
-    Args:
-        grayscale_cam: cam图, 形状为[batch_size, height, width]
-        cam_topk: 改变的像素个数,小于224*224
-    '''
-    cam = np.abs(grayscale_cam)
-    camtopk = int(cam_topk)
-    top_array, _ = compute_top_indics(cam, camtopk)
-    mask = torch.Tensor(top_array).to(device)
-    return mask, camtopk
-
 def cam_mask_topr(grayscale_cam, cam_topr = 0.1):
     '''topr为改变的pixel的比例，cam绝对值前topr比例的为1，其余为0，在三个通道中随机选一个通道
     Args:
         grayscale_cam: cam图, 形状为[batch_size, height, width]
         cam_topr: 改变的像素比例,小于1/3
+    Returns:
+        mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
+        num_change_pixels: 要修改的像素数
     '''
     cam = np.abs(grayscale_cam)
     num_pixels = cam[0].size
     num_change_pixels = int(num_pixels * cam_topr * 3) # *3是因为三个通道
-    top_array, _ = compute_top_indics(cam, num_change_pixels)
+    top_array = compute_top_indics(cam, num_change_pixels)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels
+
+def cam_mask_lowr(grayscale_cam, cam_lowr = 0.1):
+    '''lowr为改变的pixel的比例，cam绝对值后lowr比例的为1，其余为0，在三个通道中随机选一个通道
+    Args:
+        grayscale_cam: cam图, 形状为[batch_size, height, width]
+        cam_lowr: 改变的像素比例,小于1/3
+    Returns:
+        mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
+        num_change_pixels: 要修改的像素数
+    '''
+    cam = np.abs(grayscale_cam)
+    num_pixels = cam[0].size
+    num_change_pixels = int(num_pixels * cam_lowr * 3) # *3是因为三个通道
+    top_array = compute_top_indics(cam, num_change_pixels, ascending=True)
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels
 
@@ -252,6 +234,7 @@ def generate_perturbations(attack_method, eta_list, grad, **kwargs):
     attack_dict = {
         'fgsm': fgsm,
         'fgm': fgm,
+        'GD': GD,
         'gaussian_noise': gaussian_noise
     }
     perturbations = attack_dict[attack_method](eta_list, grad, **kwargs)
@@ -275,6 +258,11 @@ def fgm(eta_list, grad, **kwargs):
     perturbations = [eta * (grad / normed_grad.view(-1, 1, 1, 1)) for eta in eta_list]
     return perturbations
 
+def GD(eta_list, grad, **kwargs):
+    '''GD方法'''
+    perturbations = [torch.clamp(eta * grad, -eta, eta) for eta in eta_list]
+    return perturbations
+
 def gaussian_noise(eta_list, grad, **kwargs):
     '''高斯噪声
     fix:固定白噪声的pattern
@@ -284,8 +272,8 @@ def gaussian_noise(eta_list, grad, **kwargs):
     '''
     torch.manual_seed(0) # 固定随机种子
     fix = kwargs.get('fix', False)
-    standard_perturb = torch.randn_like(grad)
     if fix:
+        standard_perturb = torch.randn_like(grad) # 标准高斯噪声
         perturbations = [torch.clamp(eta * standard_perturb, -eta, eta) for eta in eta_list]
     else:
         perturbations = [torch.clamp(torch.randn_like(grad), -eta, eta) for eta in eta_list]
@@ -300,7 +288,7 @@ def generate_adv_images(images, perturbations):
     '''
     if images.dim() == 4: # [batch_size, channel, height, width]
         images.unsqueeze(0) # [1, batch_size, channel, height, width]
-    images = (images - images.min()) / (images.max() - images.min())
+    # images = (images - images.min()) / (images.max() - images.min())
     adv_images = [(images + perturbation).to(device) for perturbation in perturbations]
     return adv_images
    
@@ -328,10 +316,10 @@ if __name__ == '__main__':
     
     # grad3 = compute_output_grad(model, images, labels)
     # print(f'output grad: {grad3.shape}')
-    # show_grad(grad3, titles=original_classes, output_path = save_path, save_name = 'output_grad_vgg16.png')
-    jacobian = compute_jacobian(model, images)
-    print(f'jacobian: {jacobian.shape}')
-    show_grad(jacobian, titles=original_classes, output_path = save_path, save_name = 'jacobian_vgg16.png')
+    # # show_grad(grad3, titles=original_classes, output_path = save_path, save_name = 'output_grad_vgg16.png')
+    # jacobian = compute_jacobian(model, images)
+    # print(f'jacobian: {jacobian.shape}')
+    # show_grad(jacobian, titles=original_classes, output_path = save_path, save_name = 'jacobian_vgg16.png')
     
     
     

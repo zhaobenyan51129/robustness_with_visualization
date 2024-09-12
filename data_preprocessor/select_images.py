@@ -34,7 +34,7 @@ class SelectImageNet:
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         # self.testset = datasets.ImageFolder(imagenet_root + '/val')
         self.testset = datasets.ImageFolder(imagenet_root + '/val', self.transform)
@@ -111,7 +111,7 @@ class SelectImageNet:
         '''
         saved_images_count = {class_id: 0 for class_id in class_list}
         saved_images = {class_id: [] for class_id in class_list}
-        dataloader = DataLoader(self.testset, batch_size=64, shuffle=True)
+        dataloader = DataLoader(self.testset, batch_size=64, shuffle=True, num_workers=8)
 
         # 遍历数据集并添加并行化处理
       

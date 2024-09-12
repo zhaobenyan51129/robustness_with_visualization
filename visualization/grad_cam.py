@@ -307,10 +307,11 @@ def center_crop_img(img: np.ndarray, size: int):
 def main():
     '''测试'''
     model_str = 'vit_b_16'
-    data_path = './data/images_100.pth'
+    # data_path = './data/images_new_100.pth'
+    data_path = './data/imges_classified/75.pth'
     model = load_model(model_str)
     images, labels = load_images(data_path)
-    # target_layers = [model.encoder.layers[-1].ln_1]
+    # target_layers = [model.encoder.layers.encoder_layer_11.ln_1]
     target_layers = [model.blocks[-1].norm1]
     reshape_transform = ReshapeTransform(model)
     use_cuda = True
@@ -321,7 +322,7 @@ def main():
     img = images.permute(0, 2, 3, 1).detach().cpu().numpy()
 
     vis = show_cam_on_image(img, grayscale_cam, use_rgb=True)
-    show_images(vis, predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16.jpg')
+    show_images(vis, titles = predicted_classes, output_path='./data/grad_cam', save_name='grad_cam_vit_b16_75_pytorch.jpg')
     # torch.save(grad_of_input, './data/grad_of_input.pth')
     # torch.save(grad_of_loss_fun, './data/grad_of_loss_fun.pth')
 

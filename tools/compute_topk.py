@@ -1,14 +1,15 @@
 import numpy as np
 import torch
 
-def compute_top_indics(X, top_num=10):
+def compute_top_indics(X, top_num=10, ascending=False):
     '''计算输入数组的前n大的值和位置
     Args:
         X: 输入数组，shape: (batch, 224, 224, 3) or (batch, 224,224), numpy
         top_num: 前n大的值
+        ascending: 是否按升序排列, 默认为False，即降序排列，取前n大的值
     return: 
         top_array: numpy[batch, 3, 224,224] or [batch, 224,224] ，前n大的值为1，其余为0
-        coordinates: 前n大值的位置, numpy, shape: (batch, top_num, dim - 1)
+        coordinates: 前n大值的位置, numpy, shape: (batch, top_num, dim - 1)(无需返回)
     '''
     if isinstance(X, torch.Tensor):
         X = X.detach().cpu().numpy()
@@ -16,24 +17,30 @@ def compute_top_indics(X, top_num=10):
     batch = X.shape[0]
     dim = np.ndim(X)
     top_array = np.zeros_like(X, dtype=int)
-    coordinates = np.zeros((batch, top_num, dim - 1), dtype=int)
+    # coordinates = np.zeros((batch, top_num, dim - 1), dtype=int)
     for i in range(batch):
         if dim == 3:
             flattened_image = X[i].flatten()
-            top_indices = np.argpartition(flattened_image, -top_num)[-top_num:]
-            coordinates_tmp = np.column_stack(np.unravel_index(top_indices, X.shape[1:]))
-            coordinates[i] = coordinates_tmp
+            if ascending:
+                top_indices = np.argpartition(flattened_image, top_num)[:top_num] # 找到前 k 个最小的元素的索引
+            else:
+                top_indices = np.argpartition(flattened_image, -top_num)[-top_num:] # 找到前 k 个最大的元素的索引
+            # coordinates_tmp = np.column_stack(np.unravel_index(top_indices, X.shape[1:]))
+            # coordinates[i] = coordinates_tmp
             top_array[i].flat[top_indices] = 1 
         elif dim == 4:
             flattened_image = X[i].reshape(-1, 3)
-            top_indices = np.argpartition(flattened_image, -top_num, axis=None)[-top_num:]
-            coordinates_tmp = np.column_stack(np.unravel_index(top_indices, X.shape[1:]))
-            coordinates[i] = coordinates_tmp
+            if ascending:
+                top_indices = np.argpartition(flattened_image, top_num, axis=None)[:top_num]
+            else:
+                top_indices = np.argpartition(flattened_image, -top_num, axis=None)[-top_num:]
+            # coordinates_tmp = np.column_stack(np.unravel_index(top_indices, X.shape[1:]))
+            # coordinates[i] = coordinates_tmp
             top_array[i].flat[top_indices] = 1  
         else:
             print('不支持的维度')
     top_array = distribute_values_to_channels_random(top_array)
-    return top_array, coordinates
+    return top_array #, coordinates
 
 def distribute_values_to_channels(top_array):
     '''如果top_array的形状为[batch, 224, 224]，将top_array的值复制到3个通道中'''
@@ -63,5 +70,4 @@ def distribute_values_to_channels_random(top_array):
                 
     return output_array
 
-import numpy as np
 

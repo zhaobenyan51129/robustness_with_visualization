@@ -1,6 +1,8 @@
 imagenet/
 data/*
+data_stage2/*
 !data/imagenet_class_index.json
+!data/chinese_class_index.json
 __pycache__/
 .vscode/
 *.pth
