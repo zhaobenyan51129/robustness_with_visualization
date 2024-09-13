@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from data_preprocessor.load_images import load_images
 from models.load_model import load_model

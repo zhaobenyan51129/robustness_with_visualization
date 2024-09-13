@@ -6,7 +6,6 @@ import pandas as pd
 from tqdm import tqdm
 import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from visualization.reshape_tranform import ReshapeTransform
 from tools.get_classes import get_classes_with_index
@@ -20,7 +19,6 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
-print(f'device: {device}')
 
 def make_dir(path):
     if not os.path.exists(path):

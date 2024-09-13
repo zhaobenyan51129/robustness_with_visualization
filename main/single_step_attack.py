@@ -4,18 +4,20 @@ import torch
 import pandas as pd
 import sys
 import os
+from tqdm import tqdm 
 
 import warnings
 warnings.filterwarnings('ignore')
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from visualization.grad_cam import GradCAM, show_cam_on_image
 from visualization.reshape_tranform import ReshapeTransform
 from tools.get_classes import get_classes_with_index
 from tools.show_images import show_grad, show_images, plot_distribution, show_mask
 from models.load_model import load_model
+from data_preprocessor.load_images import CustomDataset
+from torch.utils.data import DataLoader
 from algorithms.single_step_wrapper import *
 
 def make_dir(path):
@@ -49,6 +51,8 @@ class OneStepAttack:
         self.original_classes = get_classes_with_index(self.labels)
         self.grad = None
         self.adv_images = None
+        if isinstance(self.model, nn.DataParallel):
+            self.model = self.model.module
         if model_str == 'vit_b_16':
             self.target_layers = [self.model.blocks[-1].norm1]
             self.reshape_transform = ReshapeTransform(self.model)
@@ -109,6 +113,12 @@ class OneStepAttack:
         perturbations = generate_perturbations(algo, eta_list, self.grad)
         perturbations = [perturbation * mask for perturbation in perturbations]
         self.adv_images = generate_adv_images(self.images, perturbations)
+        
+        # mask形状为[batch, 3, 224, 224]，计算每个通道的像素被攻击的比例
+        attacked_pixels_per_channel = mask.sum(dim=(0, 2, 3))
+        total_pixels_per_channel = mask.size(0) * mask.size(2) * mask.size(3)
+        attack_ratio_per_channel = attacked_pixels_per_channel / total_pixels_per_channel
+        attack_ratio_per_channel = [round(x, 3) for x in attack_ratio_per_channel.tolist()]
 
         if self.show:
             save_path_image = os.path.join(save_path, 'adv_images')
@@ -139,39 +149,31 @@ class OneStepAttack:
                 show_images(perturbation, output_path=save_path_perb, titles=titles, save_name=f'{round(eta,2)}.png', main_title=main_title)
                 # plot_distribution(perturbation, output_path=save_path_perb, save_name=f'distribution_{round(eta,2)}.png')
                 
-        return pixel_attacked, success_rate_dict
-    
-def load_data(data_path):
-    '''加载数据'''
-    data = torch.load(data_path)
-    images, labels = data['images'], data['labels']
-    return images, labels
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel
 
 def parameter_sample():
     algo_list = ['fgsm', 'gaussian_noise']
     eta_list = [0.1]
     
     mask_modes = {
-        'positive': [None],
-        'negative': [None],
-        'all': [None],
-        'topr': [0.3], 
-        'lowr': [0.3],
-        'randomr': [0.3],
+        # 'positive': [None],
+        # 'negative': [None],
+        # 'all': [None],
+        # 'topr': [0.3], 
+        # 'lowr': [0.3],
+        # 'randomr': [0.3],
         # 'channel_randomr': [0.3], # 不能超过1/3
-        'cam_topr': [0.3],  # 不能超过1/3否则cam_mask会出错
-        'cam_lowr': [0.3]
+        'cam_topr': [0.5],  
+        'cam_lowr': [0.5]
     }
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
     # single_root = './data/one_step_attack_sample_900'
-    single_root = './data_stage2/one_step_sample_100_0912'
+    single_root = './data_stage2/one_step_sample_100_0912_test'
     return algo_list, eta_list, mask_modes, model_list, single_root
     
-def parameter_test():
-    # 算法列表
+def parameter_total():
     algo_list = ['fgsm', 'gaussian_noise'] # 删除了'fgm'
-    eta_list = np.arange(0.01, 0.2, 0.01)
-    # mask_mode列表和对应的参数范围
+    eta_list = np.arange(0.01, 0.21, 0.01)
     mask_modes = {
         'positive': [None],
         'negative': [None],
@@ -180,94 +182,45 @@ def parameter_test():
         'lowr': np.arange(0.1, 1, 0.1),
         'randomr': np.arange(0.1, 1, 0.1),
         # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
-        'cam_topr': np.arange(0.05, 0.3, 0.05),
-        'cam_lowr': np.arange(0.05, 0.3, 0.05)
+        'cam_topr': np.arange(0.1, 1, 0.1),
+        'cam_lowr': np.arange(0.1, 1, 0.1),
     }
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    single_root = './data_stage2/one_step_attack_0913'
+    single_root = './data_stage2/one_step_attack_total_0913'
     return algo_list, eta_list, mask_modes, model_list, single_root
 
 def main():
-    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'success_rate', 'run_time'])
-    algo_list, eta_list, mask_modes, model_list, single_root = parameter_sample()
-    for model_str in model_list:
+    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'success_rate', 'run_time', 'batch'])
+    # algo_list, eta_list, mask_modes, model_list, single_root = parameter_sample()
+    algo_list, eta_list, mask_modes, model_list, single_root = parameter_total()
+    print(f'data_root is {single_root}')
+
+    dataset = CustomDataset('./data/images_100_0911.pth')
+    dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
+    
+    for model_str in tqdm(model_list, desc="Models"):
         root = os.path.join(single_root, model_str)
         make_dir(root)
-        
-        # image_path = './data/images_new_100.pth'
-        image_path = './data/images_100_0911.pth'
-        images, labels = load_data(image_path)
-        attacker = OneStepAttack(model_str, images, labels, root, show)
-        attacker.compute_grad_and_cam()
-        # attacker.show_images_grad()
-        
-        for algo in algo_list:
-            for mask_mode, parameters in mask_modes.items():
-                for parameter in parameters:
-                    # 记录运行时间
-                    start_time = time.time()
-                    if parameter is None:
-                        pixel_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)  
-                    else:
-                        pixel_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter}) 
-                    end_time = time.time()
-                    run_time = round(end_time - start_time, 3)
-                   
-                    # 遍历返回的字典中的每一个eta和对应的成功率
-                    for eta, success_rate in success_rate_dict.items():
-                        # 将结果保存到DataFrame中
-                        new_row = pd.DataFrame({
-                                    'model': [model_str],
-                                    'algo': [algo],
-                                    'mask_mode': [mask_mode],
-                                    'parameter': [parameter],
-                                    'eta': [eta],
-                                    'pixel_attacked': [pixel_attacked],
-                                    'success_rate': [success_rate],
-                                    'run_time': [run_time]
-                                })
-                        if results.empty:
-                            results = new_row
-                        else:
-                            results = pd.concat([results, new_row], ignore_index=True)
-                    print(f'{model_str}, {algo}, {mask_mode}, {parameter} is finished!')
-        torch.cuda.empty_cache()
-    results.to_excel(os.path.join(single_root, 'result_one_step_sample_100_0912.xlsx'), index=False)
-    
-def main_batch():
-    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'success_rate', 'run_time', 'batch'])
-    # algo_list, eta_list, mask_modes, model_list, single_root = parameter_sample()
-    algo_list, eta_list, mask_modes, model_list, single_root = parameter_test()
-    show = False
-    batch_size = 100
-    for model_str in model_list:
-        image_path = './data/images_900.pth'
-        images, labels = load_data(image_path)
-        total_batches = len(images) // batch_size + (len(images) % batch_size > 0)
-        for batch_idx in range(total_batches):
-            root = os.path.join(single_root, model_str, str(batch_idx))
-            if show:
-                make_dir(root)
-            start_idx = batch_idx * batch_size
-            end_idx = min((batch_idx + 1) * batch_size, len(images))
-            images_batch = images[start_idx:end_idx]
-            labels_batch = labels[start_idx:end_idx]
-            
-            attacker = OneStepAttack(model_str, images_batch, labels_batch, root, show)
+
+        # 遍历 DataLoader
+        for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1): # 1表示从1开始计数
+            attacker = OneStepAttack(model_str, images, labels, root, show)
             attacker.compute_grad_and_cam()
             # attacker.show_images_grad()
-     
-            for algo in algo_list:
-                for mask_mode, parameters in mask_modes.items():
-                    for parameter in parameters:
+            
+            for algo in tqdm(algo_list, desc="Algorithms", leave=False):
+                for mask_mode, parameters in tqdm(mask_modes.items(), desc="Mask Modes", leave=False):
+                    for parameter in tqdm(parameters, desc="Parameters", leave=False):
+                        # 记录运行时间
                         start_time = time.time()
                         if parameter is None:
-                            pixel_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)  
                         else:
-                            pixel_attacked, success_rate_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter})
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter}) 
                         end_time = time.time()
                         run_time = round(end_time - start_time, 3)
-                        #  遍历返回的字典中的每一个eta和对应的成功率
+                    
+                        # 遍历返回的字典中的每一个eta和对应的成功率
                         for eta, success_rate in success_rate_dict.items():
                             # 将结果保存到DataFrame中
                             new_row = pd.DataFrame({
@@ -277,6 +230,7 @@ def main_batch():
                                         'parameter': [parameter],
                                         'eta': [eta],
                                         'pixel_attacked': [pixel_attacked],
+                                        'attack_ratio_per_channel': [attack_ratio_per_channel],
                                         'success_rate': [success_rate],
                                         'run_time': [run_time],
                                         'batch': [batch_idx]
@@ -285,14 +239,15 @@ def main_batch():
                                 results = new_row
                             else:
                                 results = pd.concat([results, new_row], ignore_index=True)
-                        print(f'{model_str}, {algo}, {mask_mode}, {parameter} , batch: {batch_idx} is finished!') 
-            torch.cuda.empty_cache() 
-    results.to_excel(os.path.join(single_root, 'result_one_step_900.xlsx'), index=False)
-   
-
+                        # print(f'{model_str}, {algo}, {mask_mode}, {parameter} is finished!')
+            torch.cuda.empty_cache()
+    results.to_excel(os.path.join(single_root, 'result_one_step_sample100_0912.xlsx'), index=False)
+    
 if __name__ == '__main__':
-    show = True
+    show = False
+    t0 = time.time()
     main()
-    # main_batch()
+    t1 = time.time()
+    print(f'总共用时: {t1 - t0:.2f}秒')
     
     

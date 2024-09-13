@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from models.load_model import load_model
 from tools.show_images import show_images, plot_distribution, plot_line_chart

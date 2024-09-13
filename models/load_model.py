@@ -4,7 +4,6 @@ from torchvision.models import resnet34, resnet50, resnet101, resnet152, vit_b_3
 import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from models.vit_model import vit_base_patch16_224
 
@@ -42,7 +41,7 @@ def load_model(model_str):
     model.eval()
     model.to(device)
     if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs!")
+        # print(f"Using {torch.cuda.device_count()} GPUs!")
         model = torch.nn.DataParallel(model)
 
     return model

@@ -11,7 +11,6 @@ import os
 import torch.nn as nn
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from models.load_model import load_model
 

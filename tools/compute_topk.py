@@ -39,7 +39,8 @@ def compute_top_indics(X, top_num=10, ascending=False):
             top_array[i].flat[top_indices] = 1  
         else:
             print('不支持的维度')
-    top_array = distribute_values_to_channels_random(top_array)
+    # top_array = distribute_values_to_channels_random(top_array)
+    top_array = distribute_values_to_channels(top_array)
     return top_array #, coordinates
 
 def distribute_values_to_channels(top_array):

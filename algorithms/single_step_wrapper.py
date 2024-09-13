@@ -6,7 +6,6 @@ import torch.nn as nn
 import sys
 import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(BASE_DIR)
 sys.path.append(BASE_DIR)
 from tools.compute_topk import compute_top_indics
 from tools.show_images import show_grad
@@ -19,7 +18,6 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
-print(f'device: {device}')
 
 # -------------------- step1: 计算梯度 --------------------
 def compute_grad(model, X, y):
@@ -199,11 +197,12 @@ def cam_mask_topr(grayscale_cam, cam_topr = 0.1):
         num_change_pixels: 要修改的像素数
     '''
     cam = np.abs(grayscale_cam)
-    num_pixels = cam[0].size
-    num_change_pixels = int(num_pixels * cam_topr * 3) # *3是因为三个通道
+    num_pixels = cam[0].size # 224*224
+    # 如果选择compute_top_indics使用的是distribute_values_to_channels不需要*3，否则需要
+    num_change_pixels = int(num_pixels * cam_topr) 
     top_array = compute_top_indics(cam, num_change_pixels)
     mask = torch.Tensor(top_array).to(device)
-    return mask, num_change_pixels
+    return mask, num_change_pixels*3
 
 def cam_mask_lowr(grayscale_cam, cam_lowr = 0.1):
     '''lowr为改变的pixel的比例，cam绝对值后lowr比例的为1，其余为0，在三个通道中随机选一个通道
@@ -216,10 +215,11 @@ def cam_mask_lowr(grayscale_cam, cam_lowr = 0.1):
     '''
     cam = np.abs(grayscale_cam)
     num_pixels = cam[0].size
-    num_change_pixels = int(num_pixels * cam_lowr * 3) # *3是因为三个通道
+    # 如果选择compute_top_indics使用的是distribute_values_to_channels不需要*3，否则需要
+    num_change_pixels = int(num_pixels * cam_lowr) 
     top_array = compute_top_indics(cam, num_change_pixels, ascending=True)
     mask = torch.Tensor(top_array).to(device)
-    return mask, num_change_pixels
+    return mask, num_change_pixels*3
 
 # -------------------- step3: 生成扰动 --------------------
 def generate_perturbations(attack_method, eta_list, grad, **kwargs):
