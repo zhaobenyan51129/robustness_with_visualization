@@ -41,5 +41,8 @@ def load_model(model_str):
         raise Exception('model_str error!')
     model.eval()
     model.to(device)
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs!")
+        model = torch.nn.DataParallel(model)
 
     return model

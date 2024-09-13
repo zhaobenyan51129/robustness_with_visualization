@@ -233,11 +233,38 @@ def show_mask(mask, **kwargs):
         save_name: 保存的图片名
         scale: 图片缩放比例，默认为1.5
         main_title: 图片的大标题
-        
     '''
-    plt.imshow(mask, cmap='hot')
-    plt.axis('off')
-    plt.show()
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', None)
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', None)
+
+    batch_size = mask.shape[0]
+    num_rows = int(np.ceil(np.sqrt(batch_size)))
+    num_cols = int(np.ceil(batch_size / num_rows))
+    figsize = (num_cols * scale, (num_rows) * scale)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig.suptitle(main_title, fontsize=16) 
+    axes = axes.flatten()
+    for i, (ax, image) in enumerate(zip(axes, mask)):
+        if torch.is_tensor(image): # tensor
+            image = image.detach().cpu().numpy().transpose(1, 2, 0)
+        ax.imshow(image, cmap='hot')
+        ax.axis("off")  
+        if titles is not None:
+            if '/' in titles[i]:
+                ax.set_title(titles[i], fontsize=8, color='red')
+            else:
+                ax.set_title(titles[i], fontsize=8)
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_path = os.path.join(output_path, save_name)
+        plt.savefig(output_path)
+        plt.close()
+    else:
+        plt.show()
     
     
 if __name__ == '__main__':

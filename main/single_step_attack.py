@@ -137,7 +137,7 @@ class OneStepAttack:
             
                 perturbation = perturbations[i].permute(0, 2, 3, 1).detach().cpu().numpy()
                 show_images(perturbation, output_path=save_path_perb, titles=titles, save_name=f'{round(eta,2)}.png', main_title=main_title)
-                plot_distribution(perturbation, output_path=save_path_perb, save_name=f'distribution_{round(eta,2)}.png')
+                # plot_distribution(perturbation, output_path=save_path_perb, save_name=f'distribution_{round(eta,2)}.png')
                 
         return pixel_attacked, success_rate_dict
     
@@ -291,7 +291,7 @@ def main_batch():
    
 
 if __name__ == '__main__':
-    show = False 
+    show = True
     main()
     # main_batch()
     
