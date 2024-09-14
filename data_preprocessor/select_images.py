@@ -146,16 +146,15 @@ class SelectImageNet:
 
 def main():
     '''测试'''
-    # 
     model1 = load_model('vit_b_16')
     model2 = load_model('resnet50')
     model3 = load_model('vgg16')
     models = [model1, model2, model3]
     
     imagenet_root = '../imagenet'       
-    data_dir = './data'
-    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=100, image_size=224)
-    select.creat_image_file(os.path.join(data_dir, 'images_100_0911.pth'))
+    data_dir = './data_stage2'
+    select = SelectImageNet(models, imagenet_root=imagenet_root, load_images_num=1000, image_size=224)
+    select.creat_image_file(os.path.join(data_dir, 'images_1000_0914.pth'))
     # select.get_classes_acc(os.path.join(data_dir, 'class_acc.json'))
 
 def main_generate_data():

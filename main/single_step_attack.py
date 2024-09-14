@@ -167,13 +167,14 @@ def parameter_sample():
         'cam_lowr': [0.5]
     }
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    # single_root = './data/one_step_attack_sample_900'
-    single_root = './data_stage2/one_step_sample_100_0912_test'
-    return algo_list, eta_list, mask_modes, model_list, single_root
+    # data_root = './data/one_step_attack_sample_900'
+    data_root = './data_stage2/one_step_sample_100_0912_test'
+    return algo_list, eta_list, mask_modes, model_list, data_root
     
 def parameter_total():
-    algo_list = ['fgsm', 'gaussian_noise'] # 删除了'fgm'
-    eta_list = np.arange(0.01, 0.21, 0.01)
+    # algo_list = ['fgsm', 'gaussian_noise']
+    algo_list = ['fgsm']
+    eta_list = np.arange(0.005, 0.105, 0.005)
     mask_modes = {
         'positive': [None],
         'negative': [None],
@@ -186,24 +187,26 @@ def parameter_total():
         'cam_lowr': np.arange(0.1, 1, 0.1),
     }
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    single_root = './data_stage2/one_step_attack_total_0913'
-    return algo_list, eta_list, mask_modes, model_list, single_root
+    data_root = './data_stage2/one_step_attack_total1000_0914'
+    return algo_list, eta_list, mask_modes, model_list, data_root
 
 def main():
-    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'success_rate', 'run_time', 'batch'])
-    # algo_list, eta_list, mask_modes, model_list, single_root = parameter_sample()
-    algo_list, eta_list, mask_modes, model_list, single_root = parameter_total()
-    print(f'data_root is {single_root}')
+    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'success_rate', 'run_time', 'batch_idx', 'batch_pictures'])
+    # algo_list, eta_list, mask_modes, model_list, data_root = parameter_sample()
+    algo_list, eta_list, mask_modes, model_list, data_root = parameter_total()
+    print(f'data_root is {data_root}')
 
-    dataset = CustomDataset('./data/images_100_0911.pth')
+    
+    dataset = CustomDataset('./data_stage2/images_1000_0914.pth')
     dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
     
     for model_str in tqdm(model_list, desc="Models"):
-        root = os.path.join(single_root, model_str)
+        root = os.path.join(data_root, model_str)
         make_dir(root)
 
         # 遍历 DataLoader
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1): # 1表示从1开始计数
+            batch_pictures = images.size(0)
             attacker = OneStepAttack(model_str, images, labels, root, show)
             attacker.compute_grad_and_cam()
             # attacker.show_images_grad()
@@ -233,7 +236,8 @@ def main():
                                         'attack_ratio_per_channel': [attack_ratio_per_channel],
                                         'success_rate': [success_rate],
                                         'run_time': [run_time],
-                                        'batch': [batch_idx]
+                                        'batch_idx': [batch_idx],
+                                        'batch_pictures': [batch_pictures]
                                     })
                             if results.empty:
                                 results = new_row
@@ -241,7 +245,7 @@ def main():
                                 results = pd.concat([results, new_row], ignore_index=True)
                         # print(f'{model_str}, {algo}, {mask_mode}, {parameter} is finished!')
             torch.cuda.empty_cache()
-    results.to_excel(os.path.join(single_root, 'result_one_step_sample100_0912.xlsx'), index=False)
+    results.to_excel(os.path.join(data_root, 'result_one_step_sample1000_0914.xlsx'), index=False)
     
 if __name__ == '__main__':
     show = False
