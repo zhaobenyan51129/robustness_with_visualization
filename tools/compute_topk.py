@@ -13,7 +13,6 @@ def compute_top_indics(X, top_num=10, ascending=False):
     '''
     if isinstance(X, torch.Tensor):
         X = X.detach().cpu().numpy()
-    
     batch = X.shape[0]
     dim = np.ndim(X)
     top_array = np.zeros_like(X, dtype=int)
@@ -22,7 +21,7 @@ def compute_top_indics(X, top_num=10, ascending=False):
         if dim == 3:
             flattened_image = X[i].flatten()
             if ascending:
-                top_indices = np.argpartition(flattened_image, top_num)[:top_num] # 找到前 k 个最小的元素的索引
+                top_indices = np.argpartition(flattened_image, top_num)[:top_num] # 找到前 k 个最小的元素的索引,注意是从0开始的
             else:
                 top_indices = np.argpartition(flattened_image, -top_num)[-top_num:] # 找到前 k 个最大的元素的索引
             # coordinates_tmp = np.column_stack(np.unravel_index(top_indices, X.shape[1:]))

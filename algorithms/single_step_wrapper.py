@@ -19,7 +19,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-# -------------------- step1: 计算梯度 --------------------
+# -------------------- step1: 计算梯度，已弃用 --------------------
 def compute_grad(model, X, y):
     '''计算loss对输入的梯度, 对x和对delta求梯度结果是一样的
     Args:
@@ -37,7 +37,7 @@ def compute_grad(model, X, y):
     loss = nn.CrossEntropyLoss()(output, y)
     loss.backward()
     grad = delta.grad.detach().clone()
-    return grad
+    return grad, loss.item()
 
 def get_loss(output, target_category):
     '''计算输出与目标类别的损失，循环每一个样本，计算真实类别的logit值，值越大表示越接近真实类别
@@ -304,22 +304,6 @@ if __name__ == '__main__':
         os.makedirs(save_path)
 
     original_classes = get_classes_with_index(labels)
-    # show_images(images, titles=original_classes, output_path = save_path, save_name = 'original.png')
-    
-    # grad1 = compute_grad(model, images, labels)
-    # print(f'loss grad: {grad1.shape}')
-    # show_grad(grad1, titles=original_classes, output_path = save_path, save_name = 'loss_grad_vgg16.png')
-    
-    # grad2 = compute_logit_grad(model, images, labels)
-    # print(f'logit grad: {grad2.shape}')
-    # show_grad(grad2, titles=original_classes, output_path = save_path, save_name = 'logit_grad_vgg16.png')
-    
-    # grad3 = compute_output_grad(model, images, labels)
-    # print(f'output grad: {grad3.shape}')
-    # # show_grad(grad3, titles=original_classes, output_path = save_path, save_name = 'output_grad_vgg16.png')
-    # jacobian = compute_jacobian(model, images)
-    # print(f'jacobian: {jacobian.shape}')
-    # show_grad(jacobian, titles=original_classes, output_path = save_path, save_name = 'jacobian_vgg16.png')
     
     
     
