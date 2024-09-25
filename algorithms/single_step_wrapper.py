@@ -8,7 +8,6 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from tools.compute_topk import compute_top_indics
-from tools.show_images import show_grad
 from tools.get_classes import get_classes_with_index
 from models.load_model import load_model
 # from data_preprocessor.normalize import apply_normalization
@@ -235,7 +234,10 @@ def generate_perturbations(attack_method, eta_list, grad, **kwargs):
         'fgsm': fgsm,
         'fgm': fgm,
         'GD': GD,
-        'gaussian_noise': gaussian_noise
+        'gaussian_noise': gaussian_noise,
+        'gaussian_noise_sign': gaussian_noise_sign,
+        'gaussian_noise_std': gaussian_noise_std,
+        'gaussian_noise_sign_std': gaussian_noise_sign_std
     }
     perturbations = attack_dict[attack_method](eta_list, grad, **kwargs)
     return perturbations
@@ -278,6 +280,76 @@ def gaussian_noise(eta_list, grad, **kwargs):
     else:
         perturbations = [torch.clamp(torch.randn_like(grad), -eta, eta) for eta in eta_list]
     return perturbations
+
+def gaussian_noise_std(eta_list, grad, **kwargs):
+    '''高斯噪声
+    fix:固定白噪声的pattern
+        fix=True:先生成(0,1)正态分布standard_preturb,然后对每个eta,
+        用eta乘这个standard_preturb作为噪声（每个噪声值相差一个倍数）
+        fix=False:每个eta都随机生成一个（0，eta）的噪声
+    '''
+    torch.manual_seed(0) # 固定随机种子
+    fix = kwargs.get('fix', False)
+    target_std = 0.01  # 目标标准差
+    
+    if fix:
+        standard_perturb = torch.randn_like(grad) * target_std  # 调整标准差
+        perturbations = [torch.clamp(eta * standard_perturb, -eta, eta) for eta in eta_list]
+    else:
+        perturbations = [torch.clamp(torch.randn_like(grad) * target_std, -eta, eta) for eta in eta_list]
+    
+    return perturbations
+
+def gaussian_noise_sign(eta_list, grad, **kwargs):
+    '''高斯噪声
+    fix:固定白噪声的pattern
+        fix=True:先生成(0,1)正态分布standard_preturb,然后对每个eta,
+        用eta乘这个standard_preturb作为噪声（每个噪声值相差一个倍数）
+        fix=False:每个eta都随机生成一个（0，eta）的噪声
+    '''
+    torch.manual_seed(0) # 固定随机种子
+    fix = kwargs.get('fix', False)
+    if fix:
+        standard_perturb = torch.randn_like(grad) # 标准高斯噪声
+        perturbations = [eta * standard_perturb for eta in eta_list]
+    else:
+        perturbations = [torch.randn_like(grad) * eta for eta in eta_list]
+    
+    # 根据grad的符号调整扰动方向
+    adjusted_perturbations = []
+    for perturb in perturbations:
+        sign_grad = torch.sign(grad)
+        adjusted_perturb = torch.where(sign_grad > 0, torch.abs(perturb), -torch.abs(perturb))
+        adjusted_perturbations.append(adjusted_perturb)
+    
+    return adjusted_perturbations
+
+def gaussian_noise_sign_std(eta_list, grad, **kwargs):
+    '''高斯噪声
+    fix:固定白噪声的pattern
+        fix=True:先生成(0,1)正态分布standard_preturb,然后对每个eta,
+        用eta乘这个standard_preturb作为噪声（每个噪声值相差一个倍数）
+        fix=False:每个eta都随机生成一个（0，eta）的噪声
+    '''
+    torch.manual_seed(0) # 固定随机种子
+    fix = kwargs.get('fix', False)
+    target_std = 0.01
+    if fix:
+        standard_perturb = torch.randn_like(grad) * target_std
+        perturbations = [eta * standard_perturb for eta in eta_list]
+    else:
+        perturbations = [torch.clamp(torch.randn_like(grad) * target_std, -eta, eta) for eta in eta_list]
+    
+    # 根据grad的符号调整扰动方向
+    adjusted_perturbations = []
+    for perturb in perturbations:
+        sign_grad = torch.sign(grad)
+        adjusted_perturb = torch.where(sign_grad > 0, torch.abs(perturb), -torch.abs(perturb))
+        adjusted_perturbations.append(adjusted_perturb)
+    
+    return adjusted_perturbations
+
+
     
 # -------------------- step4: 生成对抗样本 --------------------
 def generate_adv_images(images, perturbations):

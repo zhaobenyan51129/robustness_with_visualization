@@ -3,7 +3,7 @@ class ReshapeTransform:
     def __init__(self, model):
         input_size = model.patch_embed.img_size
         patch_size = model.patch_embed.patch_size
-        self.h = input_size[0] // patch_size[0]
+        self.h = input_size[0] // patch_size[0] # 224/16 = 14
         self.w = input_size[1] // patch_size[1]
         
         # 如果使用pytorch自带的预训练模型，可以使用下面的代码

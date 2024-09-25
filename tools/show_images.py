@@ -1,5 +1,4 @@
 '''展示图片'''
-
 import math
 import os
 from matplotlib import pyplot as plt
@@ -34,7 +33,14 @@ def show_images(imgs, **kwargs):
     figsize = (num_cols * scale, (num_rows) * scale)
     fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
     fig.suptitle(main_title, fontsize=16) 
-    axes = axes.flatten()
+
+    # 修改开始：确保axes是可迭代的
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+    # 修改结束
+
     for i, (ax, image) in enumerate(zip(axes, imgs)):
         if torch.is_tensor(image): # tensor
             image = image.detach().cpu().numpy().transpose(1, 2, 0)
@@ -43,7 +49,6 @@ def show_images(imgs, **kwargs):
         image = (image - image_min) / (image_max - image_min) # 归一化到0-1，否则imshow会报错
         if image.dtype != np.float32 and image.dtype != np.float64:
             image = image * 255
-        # ax.imshow(image)
         ax.imshow(image)
         ax.axis("off")  
         if titles is not None:
@@ -54,60 +59,67 @@ def show_images(imgs, **kwargs):
     if output_path:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
-        output_path = os.path.join(output_path, save_name)
-        plt.savefig(output_path)
+        plt.savefig(os.path.join(output_path, save_name))
         plt.close()
     else:
         plt.show()
-        
-def show_mask(mask, **kwargs):
-    '''显示mask
-    mask: [batch, 3, 224, 224]， [batch, 224,224] numpy array or tensor, 1表示mask的区域
-    **kwargs: 包含以下可选参数的字典
-        titles: 标题， 长度与batch相等的list
-        output_path: 输出路径，如果不为None，则保存图片到指定路径
-        save_name: 保存的图片名
-        scale: 图片缩放比例，默认为1.5
-        main_title: 图片的大标题
-        
-    '''
-    titles = kwargs.get('titles', None)
-    output_path = kwargs.get('output_path', None)
-    save_name = kwargs.get('save_name', None)
-    scale = kwargs.get('scale', 1.5)
-    main_title = kwargs.get('main_title', None)
 
-    batch_size = mask.shape[0]
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
-    figsize = (num_cols * scale, (num_rows) * scale)
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
-    fig.suptitle(main_title, fontsize=16) 
-    axes = axes.flatten()
-    for i, (ax, image) in enumerate(zip(axes, mask)):
-        if torch.is_tensor(image): # tensor
-            image = image.detach().cpu().numpy().transpose(1, 2, 0)
-        ax.imshow(image, cmap='hot')
-        ax.axis("off")  
-        if titles is not None:
-            if '/' in titles[i]:
-                ax.set_title(titles[i], fontsize=8, color='red')
-            else:
-                ax.set_title(titles[i], fontsize=8)
-    if output_path:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        output_path = os.path.join(output_path, save_name)
-        plt.savefig(output_path)
-        plt.close()
-    else:
-        plt.show()
-        
-def show_grad(imgs, **kwargs):
-    '''显示图片的梯度
+
+# def show_images(imgs, **kwargs):
+#     '''显示图片
+
+#     Args:
+#         imgs: (batch,224,224,3) numpy array, or [batch,3,224,224] tensor
+#         kwargs: 包含以下可选参数的字典
+#             titles: 标题， 长度与batch相等的list
+#             output_path: 输出路径，如果不为None，则保存图片到指定路径
+#             save_name: 保存的图片名
+#             scale: 图片缩放比例，默认为1.5
+#             main_title: 图片的大标题
+#     '''
+#     titles = kwargs.get('titles', None)
+#     output_path = kwargs.get('output_path', None)
+#     save_name = kwargs.get('save_name', None)
+#     scale = kwargs.get('scale', 1.5)
+#     main_title = kwargs.get('main_title', None)
+
+#     batch_size = imgs.shape[0]
+#     num_rows = int(np.ceil(np.sqrt(batch_size)))
+#     num_cols = int(np.ceil(batch_size / num_rows))
+#     figsize = (num_cols * scale, (num_rows) * scale)
+#     fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+#     fig.suptitle(main_title, fontsize=16) 
+#     axes = axes.flatten()
+#     for i, (ax, image) in enumerate(zip(axes, imgs)):
+#         if torch.is_tensor(image): # tensor
+#             image = image.detach().cpu().numpy().transpose(1, 2, 0)
+#         image_min = image.min()
+#         image_max = image.max()
+#         image = (image - image_min) / (image_max - image_min) # 归一化到0-1，否则imshow会报错
+#         if image.dtype != np.float32 and image.dtype != np.float64:
+#             image = image * 255
+#         # ax.imshow(image)
+#         ax.imshow(image)
+#         ax.axis("off")  
+#         if titles is not None:
+#             if '/' in titles[i]:
+#                 ax.set_title(titles[i], fontsize=8, color='red')
+#             else:
+#                 ax.set_title(titles[i], fontsize=8)
+#     if output_path:
+#         if not os.path.exists(output_path):
+#             os.makedirs(output_path)
+#         output_path = os.path.join(output_path, save_name)
+#         plt.savefig(output_path)
+#         plt.close()
+#     else:
+#         plt.show()
+    
+def show_pixel_distribution(imgs, **kwargs):
+    '''显示像素分布
 
     Args:
-        imgs: 梯度[batch,3,224,224] tensor
+        imgs: (batch,224,224,3) numpy array, or [batch,3,224,224] tensor
         kwargs: 包含以下可选参数的字典
             titles: 标题， 长度与batch相等的list
             output_path: 输出路径，如果不为None，则保存图片到指定路径
@@ -125,96 +137,20 @@ def show_grad(imgs, **kwargs):
     num_rows = int(np.ceil(np.sqrt(batch_size)))
     num_cols = int(np.ceil(batch_size / num_rows))
     figsize = (num_cols * scale, (num_rows) * scale)
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
-    fig.suptitle(main_title, fontsize=16)
-    axes = axes.flatten()
-    for i, (ax, img) in enumerate(zip(axes, imgs)):
-        # 取三个通道的最大值
-        img = img.abs().max(dim=0)[0]
-        img = img.cpu().numpy()
-        img_min = img.min()
-        img_max = img.max()
-        img = (img - img_min) / (img_max - img_min)
-        ax.imshow(img, cmap='hot')
-        ax.axis("off")
-        if titles is not None:
-            ax.set_title(titles[i], fontsize=8)
-    if output_path:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        output_path = os.path.join(output_path, save_name)
-        plt.savefig(output_path)
-        plt.close()
-    else:
-        plt.show()
-        
-
-def plot_distribution(input, **kwargs): 
-    '''显示分布
-
-    Args:
-        input: [batch, 3, 224, 224]， [batch, 224,224] numpy array or tensor
-        kwargs: 包含以下可选参数的字典
-            titles: 标题， 长度与batch相等的list
-            output_path: 输出路径，如果不为None，则保存图片到指定路径
-            save_name: 保存的图片名
-            scale: 图片缩放比例，默认为2
-            main_title: 图片的大标题
-    '''
-    titles = kwargs.get('titles', None)
-    output_path = kwargs.get('output_path', None)
-    save_name = kwargs.get('save_name', None)
-    scale = kwargs.get('scale', 2)
-    main_title = kwargs.get('main_title', None)
-
-    batch_size = input.shape[0]
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
-    figsize = (num_cols * scale, (num_rows) * scale)
-    space = 0.5
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
     fig.suptitle(main_title, fontsize=16) 
-    axes = axes.flatten()
-    for i, (ax, single_input) in enumerate(zip(axes, input)):
-        if torch.is_tensor(single_input):# tensor
-            single_input = single_input.cpu().numpy()
-        flattened_single_input = single_input.flatten()
-        flattened_single_input = np.log1p(np.abs(flattened_single_input))  # 对梯度进行对数变换
-        sns.histplot(flattened_single_input, ax=ax, bins=50, kde=True, alpha=0.5)
-        if titles is not None:
-            ax.set_title(titles[i], fontsize=8)
-        ax.tick_params(axis='x', labelsize=8)
-        ax.tick_params(axis='y', labelsize=8)
-        ax.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2), useMathText=True)
-        ax.xaxis.offsetText.set_fontsize(8)
-        ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2), useMathText=True)
-        ax.yaxis.offsetText.set_fontsize(8)
-        ax.set_ylabel('')
-       
-    plt.subplots_adjust(hspace=space, wspace=space)
-    
-    if output_path:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        output_path = os.path.join(output_path, save_name)
-        plt.savefig(output_path)
-        plt.close()
-    else:
-        plt.show()
 
-def plot_line_chart(x, y, output_path = None, save_name = None, title = None):
-    '''画出y关于x的折线图
-    Args:
-        x: x轴的值
-        y: y轴的值
-        output_path: 输出路径，如果不为None，则保存图片到指定路径
-        save_name: 保存的图片名
-        title: 图片的大标题
-    '''
-    plt.plot(x, y)
-    # for i, j in zip(x, y):
-    #     plt.text(i, j, f'({round(i, 2)},{round(j, 2)})') 
-    plt.title(title)
+    for i, ax in enumerate(axs.flat):
+        if i < len(imgs):  # 确保索引不超出范围
+            ax.hist(imgs[i].detach().cpu().numpy().flatten(), bins=100)
+            if titles is not None:
+                if '/' in titles[i]:
+                    ax.set_title(titles[i], fontsize=6, color='red')
+                else:
+                    ax.set_title(titles[i], fontsize=6)
+        else:
+            ax.axis('off')  # 隐藏多余的子图
+    plt.tight_layout()
     if output_path:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
@@ -224,54 +160,117 @@ def plot_line_chart(x, y, output_path = None, save_name = None, title = None):
     else:
         plt.show()
         
-def show_mask(mask, **kwargs):
-    '''显示mask
-    mask: [batch, 3, 224, 224]， [batch, 224,224] numpy array or tensor, 1表示mask的区域
-    **kwargs: 包含以下可选参数的字典
-        titles: 标题， 长度与batch相等的list
-        output_path: 输出路径，如果不为None，则保存图片到指定路径
-        save_name: 保存的图片名
-        scale: 图片缩放比例，默认为1.5
-        main_title: 图片的大标题
+def show_gradient_distribution(gradients, **kwargs):
+    '''Display gradient distributions.
+
+    Args:
+        gradients: Tensor of gradients, shape (batch_size, channels, height, width)
+        kwargs: Contains the following optional parameters:
+            titles: List of titles, length equal to batch_size
+            output_path: Output path, if not None, save the image to the specified path
+            save_name: Name of the saved image
+            scale: Image scaling factor, default is 1.5
+            main_title: Main title of the image
     '''
     titles = kwargs.get('titles', None)
     output_path = kwargs.get('output_path', None)
-    save_name = kwargs.get('save_name', None)
+    save_name = kwargs.get('save_name', 'gradient_distributions.png')
     scale = kwargs.get('scale', 1.5)
-    main_title = kwargs.get('main_title', None)
-
-    batch_size = mask.shape[0]
+    main_title = kwargs.get('main_title', 'Gradient Distributions')
+    
+    batch_size = gradients.shape[0]
     num_rows = int(np.ceil(np.sqrt(batch_size)))
     num_cols = int(np.ceil(batch_size / num_rows))
-    figsize = (num_cols * scale, (num_rows) * scale)
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
-    fig.suptitle(main_title, fontsize=16) 
-    axes = axes.flatten()
-    for i, (ax, image) in enumerate(zip(axes, mask)):
-        if torch.is_tensor(image): # tensor
-            image = image.detach().cpu().numpy().transpose(1, 2, 0)
-        ax.imshow(image, cmap='hot')
-        ax.axis("off")  
-        if titles is not None:
-            if '/' in titles[i]:
-                ax.set_title(titles[i], fontsize=8, color='red')
-            else:
-                ax.set_title(titles[i], fontsize=8)
+    figsize = (num_cols * scale, num_rows * scale)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig.suptitle(main_title, fontsize=16)
+    
+    # Flatten axs for easy iteration
+    if num_rows * num_cols == 1:
+        axs = np.array([axs])
+    else:
+        axs = axs.flatten()
+    
+    for i, ax in enumerate(axs):
+        if i < batch_size:
+            grad_i = gradients[i]  # Shape: (channels, height, width)
+            grad_i_flat = grad_i.view(-1).cpu().detach().numpy()
+            ax.hist(grad_i_flat, bins=100, color='blue', alpha=0.7)
+            if titles and i < len(titles):
+                if '/' in titles[i]:
+                    ax.set_title(titles[i], fontsize=8, color='red')
+                else:
+                    ax.set_title(titles[i], fontsize=8)
+        else:
+            ax.axis('off')  # Hide extra subplots
+
+    plt.tight_layout()
     if output_path:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
-        output_path = os.path.join(output_path, save_name)
-        plt.savefig(output_path)
+        output_file = os.path.join(output_path, save_name)
+        plt.savefig(output_file)
         plt.close()
     else:
         plt.show()
     
-    
-if __name__ == '__main__':
-    import sys
-    sys.path.append('C:\\Users\\19086\\Desktop\\experince\\robustness_with_visualization')
-    from data_preprocessor.load_images import load_images
-    from tools.get_classes import get_classes_with_index
-    images, labels = load_images('./select_images.pth')
-    classes = get_classes_with_index(labels)
-    # plot_distrubution(images, titles=classes, output_path='./data/show_images', save_name='distrubution.png')
+def visualize_masks_overlay(images, masks, **kwargs):
+    '''
+    Overlay masks on the original images.
+
+    Args:
+        images: Tensor of images, shape (batch_size, channels, height, width)
+        masks: Tensor of masks, same shape as images
+        kwargs: Optional parameters
+    '''
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', 'mask_overlay_visualization.png')
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', 'Mask Overlay Visualization')
+
+    batch_size = images.shape[0]
+
+    num_rows = int(np.ceil(np.sqrt(batch_size)))
+    num_cols = int(np.ceil(batch_size / num_rows))
+
+    figsize = (num_cols * scale, num_rows * scale)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
+    fig.suptitle(main_title, fontsize=16)
+
+    if num_rows * num_cols == 1:
+        axs = np.array([axs])
+    else:
+        axs = axs.flatten()
+
+    for i, ax in enumerate(axs):
+        if i < batch_size:
+            image_i = images[i].cpu().detach().numpy().transpose(1, 2, 0)
+            mask_i = masks[i].max(dim=0)[0].cpu().detach().numpy()
+            # Normalize image to [0, 1] for visualization
+            image_i = (image_i - image_i.min()) / (image_i.max() - image_i.min())
+            # Create an overlay by adding the mask to the image
+            overlay = image_i.copy()
+            overlay[mask_i > 0] = [1, 0, 0]  # Highlight mask regions in red
+            ax.imshow(overlay)
+            ax.axis('off')
+            if titles is not None:
+                if '/' in titles[i]:
+                    ax.set_title(titles[i], fontsize=8, color='red')
+                else:
+                    ax.set_title(titles[i], fontsize=8)
+            else:
+                ax.set_title(f'{i+1}')
+        else:
+            ax.axis('off')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_file = os.path.join(output_path, save_name)
+        plt.savefig(output_file)
+        plt.close()
+    else:
+        plt.show()
+

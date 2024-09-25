@@ -14,7 +14,7 @@ sys.path.append(BASE_DIR)
 from visualization.grad_cam import GradCAM, show_cam_on_image
 from visualization.reshape_tranform import ReshapeTransform
 from tools.get_classes import get_classes_with_index
-from tools.show_images import show_grad, show_images, plot_distribution, show_mask
+from tools.show_images import visualize_masks_overlay, show_images, show_pixel_distribution
 from models.load_model import load_model
 from data_preprocessor.load_images import CustomDataset
 from torch.utils.data import DataLoader
@@ -75,12 +75,13 @@ class OneStepAttack:
         else:
             self.use_cuda = False 
 
-    def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, **kwargs):
+    def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, show = False, **kwargs):
         '''对模型进行单步法攻击
         Args:
             algo: 攻击算法
             eta_list: 扰动的范围
             mask_mode: 选择攻击像素的方式
+            show: 是否画图
             kwargs: 掩码模式的参数
         return:
             pixel_attacked: 攻击的像素
@@ -89,11 +90,12 @@ class OneStepAttack:
             l1_norm: 被攻击像素的L1范数
             l2_norm_squre: 被攻击像素的L2范数平方
             original_loss: 原始损失
-            attack_after_loss_dict: 攻击后的损失字典
+            loss_dict_attacked: 攻击后的损失字典
         '''
         
         # 获取掩码参数并构建保存路径
         para = kwargs.get(mask_mode, None)
+    
         if para is not None:
             save_path = os.path.join(self.root, algo, mask_mode, str(para))
         else:
@@ -108,6 +110,7 @@ class OneStepAttack:
         ori_loss.backward()
         original_loss = - round(ori_loss.item(), 3)
         self.grad = delta.grad.detach().clone()
+        
         # 根据mask_mode选择掩码生成方式
         if mask_mode in ['cam_lowr', 'cam_topr']:
             self.grayscale_cam, self.vis = run_grad_cam(
@@ -117,6 +120,10 @@ class OneStepAttack:
             mask, pixel_attacked = cam_mask(self.grayscale_cam, mode=mask_mode, **kwargs)
         else:
             mask, pixel_attacked = grad_mask(self.grad, mode=mask_mode, **kwargs)
+        
+        if show:
+            titles = [f'{i+1}:{self.original_classes[i]}' for i in range(len(self.original_classes))]
+            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, save_name='mask_overlay_visualization.png')
         
         # 生成扰动并应用掩码
         perturbations = generate_perturbations(algo, eta_list, self.grad)
@@ -132,10 +139,10 @@ class OneStepAttack:
         attacked_pixels_per_channel = mask.sum(dim=(0, 2, 3))
         total_pixels_per_channel = mask.size(0) * mask.size(2) * mask.size(3)
         attack_ratio_per_channel = attacked_pixels_per_channel / total_pixels_per_channel
-        attack_ratio_per_channel = [round(x, 3) for x in attack_ratio_per_channel.tolist()]
-        
+        attack_ratio_per_channel = [round(x, 4) for x in attack_ratio_per_channel.tolist()]
+
         success_rate_dict = {}
-        attack_after_loss_dict = {}  # 用于存储每个扰动下的攻击后损失
+        loss_dict_attacked = {}  # 用于存储每个扰动下的攻击后损失
         
         for i, eta in enumerate(eta_list):
             # 获取对应的对抗样本
@@ -144,42 +151,66 @@ class OneStepAttack:
             # 计算对抗样本的输出和损失
             adv_output = self.model(adv_image)
             adv_loss = loss_fn(adv_output, self.labels)
-            attack_after_loss = adv_loss.item()  # 获取标量损失值
-            attack_after_loss_dict[eta] = - round(attack_after_loss, 3)  # 保存攻击后的损失
+            loss_attacked = adv_loss.item()  # 获取标量损失值
+            loss_dict_attacked[eta] = - round(loss_attacked, 3)  # 保存攻击后的损失
             
             # 计算成功率
             pred = adv_output.argmax(dim=1)
             success_rate = (pred != self.labels).float().mean().item()
             success_rate_dict[eta] = success_rate
-        
-        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, attack_after_loss_dict
+            
+            # 画图
+            if show:
+                adv_classes = get_classes_with_index(pred)
+                titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, adv_classes)]
+                main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict_attacked[eta]}'
+                # 被攻击之后的图片
+                show_images(self.adv_images[i], output_path=save_path, save_name=f'adv_images_eta{round(eta,2)}.png', titles=titles, main_title=main_title)
+                # 扰动图像
+                show_images(perturbations[i], output_path=save_path, save_name=f'perturbations_eta{round(eta,2)}.png', titles=titles, main_title=main_title)
+                
+                # 扰动分布以及一范数和二范数
+                norm1 = round(perturbations[i].abs().sum().cpu().item(), 4)
+                norm2 = round((perturbations[i] ** 2).sum().cpu().item(), 6)
+                main_title_per = f'eta: {eta}, L1: {norm1}, L2: {norm2}, success_rate: {success_rate:.2f}'
+                show_pixel_distribution(perturbations[i], output_path=save_path, save_name=f'perturbation_distribution_eta{round(eta,2)}.png', titles=titles, main_title=main_title_per)
+                
+                
+                # 像素分布
+                show_pixel_distribution(adv_image, output_path=save_path,titles=titles, save_name=f'pixel_distribution_eta{round(eta,2)}.png', main_title=main_title)
+                # Grad-CAM
+                _, vis = run_grad_cam(self.model, self.adv_images[i], pred, self.target_layers, self.reshape_transform, self.use_cuda)
+                show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_eta{round(eta,2)}.png', main_title=main_title)
+  
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked
 
 
-def parameter_sample():
-    algo_list = ['fgsm']
-    eta_list = [0.1]
-    
+def parameter_vis():
+    algo_list = ['fgsm', 'gaussian_noise','gaussian_noise_sign','gaussian_noise_std', 'gaussian_noise_sign_std']
+    eta_list = [0.01]
+    show = True
     mask_modes = {
         # 'positive': [None],
         # 'negative': [None],
         'all': [None],
-        'topr': [0.3], 
-        # 'lowr': [0.3],
-        # 'randomr': [0.3],
+        # 'topr': [0.15], 
+        # 'lowr': [0.85],
+        # 'randomr': [0.15],
         # 'channel_randomr': [0.3], # 不能超过1/3
-        # 'cam_topr': [0.3],  
-        'cam_lowr': [0.3], 
+        # 'cam_topr': [0.15],  
+        # 'cam_lowr': [0.85], 
     }
     # model_list = ['vit_b_16', 'resnet50', 'vgg16']
     model_list = ['vit_b_16']
-    data_root = './data_stage2/one_step_sample_100_0919_test_loss'
+    data_root = './data_stage2/vis_single_step_attack_16'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'one_step_sample100_0919_test_loss.xlsx'
-    return algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file
+    save_result_file = 'vis_one_step_sample100_0922.xlsx'
+    return algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file, show
     
 def parameter_total():
     algo_list = ['fgsm', 'gaussian_noise']
     eta_list = np.arange(0.005, 0.105, 0.005)
+    show = False
     mask_modes = {
         'positive': [None],
         'negative': [None],
@@ -201,26 +232,28 @@ def parameter_total():
         data_root = './data_stage2/one_step_attack_total100_0919'
         dataset_file = './data_stage2/images_100_0911.pth'
         save_result_file = 'one_step_attack_total100_0919_normed.xlsx'
-    return algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file
+    return algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file, show
 
 def main():
-    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm','success_rate', 'original_loss', 'attack_after_loss_dict', 'run_time', 'batch_idx', 'batch_pictures'])
-    # algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file = parameter_sample()
-    algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file = parameter_total()
+    results = pd.DataFrame(columns=['model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm','success_rate', 'original_loss', 'loss_dict_attacked', 'run_time', 'batch_idx', 'batch_pictures'])
+    algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_vis()
+    # algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_total()
     print(f'data_root is {data_root}')
 
     dataset = CustomDataset(dataset_file)
-    # dataset = torch.utils.data.Subset(dataset, range(16)) # 验证阶段，取16张
+    dataset = torch.utils.data.Subset(dataset, range(16)) # 验证阶段，取16张
     dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
     
     for model_str in tqdm(model_list, desc="Models"):
         root = os.path.join(data_root, model_str)
         make_dir(root)
-
         # 遍历 DataLoader
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1): # 1表示从1开始计数
             batch_pictures = images.size(0)
             attacker = OneStepAttack(model_str, images, labels, root)
+            # if show:
+            #     _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
+            #     show_images(vis, titles = get_classes_with_index(attacker.labels), output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
             
             for algo in algo_list:
                 for mask_mode, parameters in mask_modes.items():
@@ -230,9 +263,9 @@ def main():
                         # 记录运行时间
                         start_time = time.time()
                         if parameter is None:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, attack_after_loss_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode)  
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode)  
                         else:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, attack_after_loss_dict = attacker.attack(algo=algo, eta_list=eta_list, mask_mode=mask_mode, **{mask_mode: parameter}) 
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode, **{mask_mode: parameter}) 
                         end_time = time.time()
                         run_time = round(end_time - start_time, 3)
                     
@@ -251,7 +284,7 @@ def main():
                                         'l2_norm': [l2_norm_squre],
                                         'success_rate': [success_rate],
                                         'original_loss': [original_loss],
-                                        'attack_loss': [attack_after_loss_dict[eta]],
+                                        'attack_loss': [loss_dict_attacked[eta]],
                                         'run_time': [run_time],
                                         'batch_idx': [batch_idx],
                                         'batch_pictures': [batch_pictures]

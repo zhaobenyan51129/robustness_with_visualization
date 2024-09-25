@@ -12,7 +12,9 @@ sys.path.append(BASE_DIR)
 from data_preprocessor.load_images import CustomDataset
 from torch.utils.data import DataLoader
 from algorithms.single_step_wrapper import *
+from tools.get_classes import get_classes_with_index
 from main.single_step_attack import OneStepAttack, run_grad_cam, make_dir
+from tools.show_images import visualize_masks_overlay, show_images, show_pixel_distribution
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -21,7 +23,7 @@ else:
 
 class MultiStepAttack(OneStepAttack):
     def __init__(self, model_str, images, labels, root, steps=10):
-        super().__init__(model_str, images, labels, root, show = False)
+        super().__init__(model_str, images, labels, root)
         self.steps = steps
     
     def compute_loss_function(self, output, y, loss_mode):
@@ -42,7 +44,7 @@ class MultiStepAttack(OneStepAttack):
             loss = get_loss(output, y)
         return loss
     
-    def attack(self, algo, alpha, eta, mask_mode='all', early_stopping=False, patience=50, tol=0.01, target_success_rate=1.0, **kwargs):
+    def attack(self, algo, alpha, eta, mask_mode='all', early_stopping=False, patience=200, tol=0.01, target_success_rate=1.0, show = False, **kwargs):
         """
         对模型进行多步法攻击，增加早停策略。
 
@@ -56,6 +58,7 @@ class MultiStepAttack(OneStepAttack):
             patience: 在没有显著提升的情况下，允许的最大连续不改进的步数，int, default: 50
             tol: 损失值下降的最小幅度，float, default: 0.01
             target_success_rate: 达到该成功率时，提前终止攻击，float, default: 1.0
+            show: 是否画图，bool, default: False
             **kwargs: 其他可选参数
 
         Returns:
@@ -65,6 +68,14 @@ class MultiStepAttack(OneStepAttack):
             l1_norm_dict: dict记录每步的L1范数
             l2_norm_square_dict: dict记录每步的L2范数平方
         """
+        # 获取掩码参数并构建保存路径
+        para = kwargs.get(mask_mode, None)
+    
+        if para is not None:
+            save_path = os.path.join(self.root, mask_mode, str(para))
+        else:
+            save_path = os.path.join(self.root, mask_mode)
+            
         # 初始化扰动
         delta = torch.zeros_like(self.images, requires_grad=True)
         
@@ -87,7 +98,7 @@ class MultiStepAttack(OneStepAttack):
             no_improve_steps_success = 0
             no_improve_steps_loss = 0
 
-        for t in tqdm(range(self.steps), desc="steps"):
+        for t in range(self.steps):
             # 前向传播
             output = self.model(self.images + delta)
             pred = output.argmax(dim=1)
@@ -98,7 +109,7 @@ class MultiStepAttack(OneStepAttack):
 
             # 计算损失值（交叉熵损失）
             loss = nn.CrossEntropyLoss()(output, self.labels)
-            loss_dict[t] = - loss.item()
+            loss_dict[t] = - round(loss.item(), 3)
             loss.backward()
             grad = delta.grad.detach().clone()
             
@@ -111,6 +122,13 @@ class MultiStepAttack(OneStepAttack):
                 mask, _ = cam_mask(grayscale_cam, mode=mask_mode, **kwargs)
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
+            
+            # 每隔50步画一次mask
+            if show and t % 50 == 0:
+                adv_classes = get_classes_with_index(pred)
+                titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, adv_classes)]
+                main_title = f'success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
+                visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, main_title = main_title, save_name=f'mask_overlay_visualization_step{t}.png')
             
             # 计算被攻击pixel的梯度范数
             masked_grad = grad * mask
@@ -126,7 +144,7 @@ class MultiStepAttack(OneStepAttack):
                 delta.data = delta.data + alpha * mask * grad
             delta.data = torch.clamp(delta.data, -eta, eta)
             delta.grad.zero_()
-            
+ 
             # 早停策略
             if early_stopping:
                 # 将当前的成功率和损失值添加到窗口中
@@ -158,14 +176,26 @@ class MultiStepAttack(OneStepAttack):
                     if no_improve_steps_loss >= patience:
                         print(f"步数 {t}: 在连续 {patience} 步中，损失值没有显著下降。提前终止攻击。")
                         break
-        return delta, success_rate_dict, loss_dict, l1_norm_dict, l2_norm_square_dict
+        if show:
+            adv_classes = get_classes_with_index(pred)
+            titles = [f'{original}/{pred}' if original != pred else original for original, pred in zip(self.original_classes, adv_classes)]
+            main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
+            # 扰动delta
+            show_images(delta, titles=titles, output_path=save_path, save_name=f'delta_step{t}.png', main_title=main_title)
+            # 扰动后的图片
+            show_images(self.images + delta, titles=titles, output_path=save_path, save_name=f'adversarial_images_step{t}.png', main_title=main_title)
+            # Grad-CAM
+            _, vis = run_grad_cam(self.model, self.images + delta, pred, self.target_layers, self.reshape_transform, self.use_cuda)
+            show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_step{t}.png', main_title=main_title)
+            
+        return success_rate_dict, loss_dict, l1_norm_dict, l2_norm_square_dict
         
-def parameter_sample():
+def parameter_total():
     algo_list = ['i_fgsm']
     eta_list = [0.01]
     alpha_list = [1e-4]
     steps = 500
-    
+    show = False
     mask_modes = {
         'positive': [None],
         'negative': [None],
@@ -177,30 +207,49 @@ def parameter_sample():
         'cam_topr': np.arange(0.1, 1, 0.1),
         'cam_lowr': np.arange(0.1, 1, 0.1),
     }
-    # mask_modes = {
-    #     'positive': [None],
-    #     'negative': [None],
-    #     # 'all': [None],
-    #     'topr': [0.3],
-    #     'lowr': [0.3],
-    #     'randomr':  [0.3],
-    #     # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
-    #     'cam_topr': [0.3],
-    #     'cam_lowr': [0.3],
-    # }
+
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
     # model_list = ['vgg16']
     data_root = './data_stage2/multi_step_total100_0918'
     dataset_file = './data/images_100_0911.pth'
     save_result_file = 'result_multi_step_total100_0918.xlsx'
-    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file
+    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
+
+def parameter_vis():
+    algo_list = ['i_fgsm']
+    eta_list = [0.01]
+    alpha_list = [1e-4]
+    steps = 300
+    show = True
+    mask_modes = {
+        'positive': [None],
+        'negative': [None],
+        'all': [None],
+        'topr': [0.2],
+        'lowr': [0.8],
+        'randomr':  [0.2],
+        # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
+        'cam_topr': [0.2],
+        'cam_lowr': [0.8],
+ }
+
+    model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    data_root = './data_stage2/vis_multi_step_0922_64'
+    dataset_file = './data_stage2/images_100_0911.pth'
+    save_result_file = 'vis_result_multi_step_0920.xlsx'
+    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
+
         
 def main():
-    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file = parameter_sample()
+    # algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_total()
+    
+    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_vis()
+    
     print(f'data_root is {data_root}')
     
     dataset = CustomDataset(dataset_file)
-    dataloader = DataLoader(dataset, batch_size=50, shuffle=False)
+    dataset = torch.utils.data.Subset(dataset, range(64)) # 验证阶段，取16张
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=False)
     
     for model_str in tqdm(model_list, desc="Models"):
         results = pd.DataFrame(columns=['model', 'algo', 'alpha', 'mask_mode', 'step','parameter', 'eta', 'success_rate', 'l1_norm', 'l2_norm', 'run_time', 'batch_idx', 'batch_pictures'])
@@ -210,6 +259,10 @@ def main():
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1):
             batch_pictures = images.size(0)
             attacker = MultiStepAttack(model_str, images, labels, root, steps=steps)
+            if show:
+                _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
+                show_images(vis, titles = get_classes_with_index(attacker.labels), output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
+                
             for algo in algo_list:
                 for eta in eta_list:
                     for alpha in alpha_list:
@@ -217,22 +270,25 @@ def main():
                             for parameter in parameters:
                                 start_time = time.time()
                                 if parameter is None:
-                                   detla, success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                                   success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
                                        algo=algo, 
                                        alpha=alpha, 
                                        eta=eta, 
                                        mask_mode=mask_mode,
-                                       early_stopping=True)
+                                       early_stopping=True,
+                                       show=show
+                                       )
                                 else:
-                                    detla, success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                                    success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
                                         algo=algo, 
                                         alpha=alpha, 
                                         eta=eta, 
                                         mask_mode=mask_mode, 
-                                        early_stopping=True,
+                                        early_stopping=False,
+                                        show=show,
                                         **{mask_mode: parameter})
                                 run_time = round(time.time() - start_time,3)
-                                
+
                                 for step, success_rate in success_rate_dict.items():
                                     new_row = pd.DataFrame({
                                         'model': model_str, 
@@ -255,7 +311,7 @@ def main():
                                     else:
                                         results = pd.concat([results, new_row], ignore_index=True)
             torch.cuda.empty_cache()
-        results.to_excel(os.path.join(data_root, f'{model_str}_{save_result_file}'), index=False)
+        results.to_excel(os.path.join(root, f'{model_str}_{save_result_file}'), index=False)
     
 
 if __name__ == "__main__":

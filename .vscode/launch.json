@@ -30,6 +30,17 @@
             "env": {
                 "PYDEVD_DISABLE_FILE_VALIDATION": "1"
             }
+        },
+        {
+            "name": "merge_images.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/merge_images.py",
+            "python": "/root/miniconda3/bin/python",
+            "console": "integratedTerminal",
+            "env": {
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1"
+            }
         }
             
         
