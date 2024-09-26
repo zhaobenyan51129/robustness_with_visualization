@@ -140,6 +140,8 @@ class OneStepAttack:
         total_pixels_per_channel = mask.size(0) * mask.size(2) * mask.size(3)
         attack_ratio_per_channel = attacked_pixels_per_channel / total_pixels_per_channel
         attack_ratio_per_channel = [round(x, 4) for x in attack_ratio_per_channel.tolist()]
+        
+        # 计算每张图片每个通道被攻击的像素比例
 
         success_rate_dict = {}
         loss_dict_attacked = {}  # 用于存储每个扰动下的攻击后损失
@@ -186,7 +188,7 @@ class OneStepAttack:
 
 
 def parameter_vis():
-    algo_list = ['fgsm', 'gaussian_noise','gaussian_noise_sign','gaussian_noise_std', 'gaussian_noise_sign_std']
+    algo_list = ['fgsm', 'gaussian_noise', 'gaussian_noise_sign','gaussian_noise_std', 'gaussian_noise_sign_std']
     eta_list = [0.01]
     show = True
     mask_modes = {

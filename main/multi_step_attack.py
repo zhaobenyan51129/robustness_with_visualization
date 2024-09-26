@@ -204,8 +204,8 @@ def parameter_total():
         'lowr': np.arange(0.1, 1, 0.1),
         'randomr': np.arange(0.1, 1, 0.1),
         # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
-        'cam_topr': np.arange(0.1, 1, 0.1),
-        'cam_lowr': np.arange(0.1, 1, 0.1),
+        # 'cam_topr': np.arange(0.1, 1, 0.1),
+        # 'cam_lowr': np.arange(0.1, 1, 0.1),
     }
 
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
