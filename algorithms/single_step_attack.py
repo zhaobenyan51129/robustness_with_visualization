@@ -22,7 +22,7 @@ else:
 
 def make_dir(path):
     if not os.path.exists(path):
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
     
 def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cuda):
     '''运行Grad-CAM算法,并返回可视化结果和预测的类别

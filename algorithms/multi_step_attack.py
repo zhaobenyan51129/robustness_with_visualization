@@ -117,8 +117,8 @@ class MultiStepAttack(OneStepAttack):
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
             
-            # 每隔50步画一次mask
-            if show and t % 50 == 0:
+            # 每隔100步画一次mask
+            if show and t % 100 == 0:
                 adv_classes = get_classes_with_index(pred)
                 titles = [f'{i+1}:{original}/{pred}' if original != pred else f'{i+1}:{original}' for i, (original, pred) in enumerate(zip(self.original_classes, adv_classes))]
                 main_title = f'success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'

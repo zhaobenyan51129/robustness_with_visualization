@@ -3,14 +3,16 @@ import time
 import os
 import torch
 import sys
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 import time
 from tqdm import tqdm
-from data_preprocessor.load_images import CustomDataset
-from torch.utils.data import DataLoader
-from algorithms.single_step_attack import *
-from algorithms.multi_step_attack import *
+import multiprocessing
+
+from tools.get_classes import get_classes_with_index
+from algorithms.single_step_attack import make_dir, run_grad_cam
+from tools.show_images import show_images
 
 def parameter_test_single():
     algo_list = ['fgsm'] 
@@ -26,7 +28,7 @@ def parameter_test_single():
         'cam_lowr': [0.85], 
     }
     model = 'vit_b_16'
-    data_root = './data_stage2/classified_single_attack'
+    data_root = './data_stage2/test_classified_single_attack'
     make_dir(data_root)
     save_result_file = 'classified_single_attack_1010.xlsx'
     return algo_list, eta_list, mask_modes, model, data_root, save_result_file
@@ -52,88 +54,116 @@ def parameter_test_multi():
     save_result_file = 'classified_multi_attack_1011.xlsx'
     return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file
 
-def main_single(index_list, show):
-    algo_list, eta_list, mask_modes, model_str, data_root, save_result_file = parameter_test_single()
+def process_indices_single(indices, device_id, show):
+    # 设置当前进程使用的 GPU
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(device_id)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    results = pd.DataFrame(columns=['index', 'model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm','success_rate', 'original_loss', 'loss_dict_attacked', 'picture_all', 'picture_attacked', 'run_time'])
+    # 在子进程中导入或初始化任何使用 CUDA 的模块或函数
+    from data_preprocessor.load_images import CustomDataset
+    from torch.utils.data import DataLoader
+    from algorithms.single_step_attack import OneStepAttack
 
-    for index in tqdm(index_list, desc="Index", leave=False):
+    algo_list, eta_list, mask_modes, model_str, data_root, _ = parameter_test_single()
+    result_dir = os.path.join(data_root, 'results')
+    make_dir(result_dir)
+    
+    for index in indices:
+        results = pd.DataFrame(columns=['index', 'model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm', 'success_rate', 'original_loss', 'loss_dict_attacked', 'picture_all', 'picture_attacked', 'run_time'])
         dataset_file = f'./data_stage2/images_classified/{index}.pth'
         dataset = CustomDataset(dataset_file)
         picture_all = len(dataset)
         dataloader = DataLoader(dataset, batch_size=picture_all, shuffle=False)
-        root = os.path.join(data_root,index)
+        root = os.path.join(data_root, index)
+        make_dir(root)
         
-        for images, labels in dataloader: 
+        for images, labels in dataloader:
+            # 将数据移动到指定的设备
+            images = images.to(device)
+            labels = labels.to(device)
+            
+            # 初始化攻击器，传入设备信息
             attacker = OneStepAttack(model_str, images, labels, root)
             if show:
-                titles = [f'{i+1}: {cls}' for i, cls in get_classes_with_index(attacker.labels)]
-        
+                titles = [f'{i+1}: {cls}' for i, cls in enumerate(get_classes_with_index(attacker.labels))]
                 _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
-                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
+                show_images(vis, titles=titles, output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
             
             for algo in tqdm(algo_list, desc="Algorithms", leave=False):
                 for mask_mode, parameters in mask_modes.items():
                     if algo == 'gaussian_noise' and mask_mode not in ('all', 'positive', 'negative'):
                         continue
                     for parameter in parameters:
-                        # 记录运行时间
                         start_time = time.time()
                         if parameter is None:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode)  
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(
+                                algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode
+                            )
                         else:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode, **{mask_mode: parameter}) 
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(
+                                algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode, **{mask_mode: parameter}
+                            )
                         end_time = time.time()
                         run_time = round(end_time - start_time, 3)
                     
-                        # 遍历返回的字典中的每一个eta和对应的成功率
                         for eta, success_rate in success_rate_dict.items():
-                            # 将结果保存到DataFrame中
                             new_row = pd.DataFrame({
-                                        'index': [index],
-                                        'model': [model_str],
-                                        'algo': [algo],
-                                        'mask_mode': [mask_mode],
-                                        'parameter': [parameter],
-                                        'eta': [eta],
-                                        'pixel_attacked': [pixel_attacked],
-                                        'attack_ratio_per_channel': [attack_ratio_per_channel],
-                                        'l1_norm': [l1_norm],
-                                        'l2_norm': [l2_norm_squre],
-                                        'success_rate': [success_rate],
-                                        'original_loss': [original_loss],
-                                        'loss_dict_attacked': [loss_dict_attacked[eta]],
-                                        'picture_all': [picture_all],
-                                        'picture_attacked':[int(picture_all * success_rate)],
-                                        'run_time': [run_time]
-                                    })
-                            if results.empty:
-                                results = new_row
-                            else:
-                                results = pd.concat([results, new_row], ignore_index=True)
-            torch.cuda.empty_cache()
-    results.to_excel(os.path.join(data_root, save_result_file), index=False)
+                                'index': [index],
+                                'model': [model_str],
+                                'algo': [algo],
+                                'mask_mode': [mask_mode],
+                                'parameter': [parameter],
+                                'eta': [eta],
+                                'pixel_attacked': [pixel_attacked],
+                                'attack_ratio_per_channel': [attack_ratio_per_channel],
+                                'l1_norm': [l1_norm],
+                                'l2_norm': [l2_norm_squre],
+                                'success_rate': [success_rate],
+                                'original_loss': [original_loss],
+                                'loss_dict_attacked': [loss_dict_attacked[eta]],
+                                'picture_all': [picture_all],
+                                'picture_attacked': [int(picture_all * success_rate)],
+                                'run_time': [run_time]
+                            })
+                            results = pd.concat([results, new_row], ignore_index=True)
+        torch.cuda.empty_cache()
+        # 保存每个 index 的结果
+        results.to_excel(os.path.join(result_dir, f'results_{index}.xlsx'), index=False)
     
-def main_multi(index_list, show):
-    algo, eta, alpha, steps, mask_modes, model_str, data_root, save_result_file = parameter_test_multi()
+def process_indices_multi(indices, device_id, show):
+    # 设置当前进程使用的 GPU
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(device_id)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    results = pd.DataFrame(columns=['index', 'model', 'algo', 'alpha', 'mask_mode', 'parameter', 'step', 'eta',  'l1_norm', 'l2_norm','success_rate', 'loss', 'run_time'])
+    # 在子进程中导入或初始化任何使用 CUDA 的模块或函数
+    from data_preprocessor.load_images import CustomDataset
+    from torch.utils.data import DataLoader
+    from algorithms.multi_step_attack import MultiStepAttack
 
-    for index in tqdm(index_list, desc="Index", leave=False):
+    algo, eta, alpha, steps, mask_modes, model_str, data_root, _ = parameter_test_multi()
+    result_dir = os.path.join(data_root, 'results')
+    make_dir(result_dir)
+
+    for index in indices:
+        results = pd.DataFrame(columns=['index', 'model', 'algo', 'alpha', 'mask_mode', 'parameter', 'step', 'eta',  'l1_norm', 'l2_norm','success_rate', 'loss', 'run_time'])
         dataset_file = f'./data_stage2/images_classified/{index}.pth'
         dataset = CustomDataset(dataset_file)
         picture_all = len(dataset)
         dataloader = DataLoader(dataset, batch_size=picture_all, shuffle=False)
         root = os.path.join(data_root, index)
+        make_dir(root)
         
-        for images, labels in dataloader: 
+        for images, labels in dataloader:
+            # 将数据移动到指定的设备
+            images = images.to(device)
+            labels = labels.to(device)
+            
             attacker = MultiStepAttack(model_str, images, labels, root, steps=steps)
             if show:
-                titles = [f'{i+1}: {cls}' for i, cls in get_classes_with_index(attacker.labels)]
-        
+                titles = [f'{i+1}: {cls}' for i, cls in enumerate(get_classes_with_index(attacker.labels))]
                 _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
-                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
-                
+                show_images(vis, titles=titles, output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
+            
             for mask_mode, parameters in tqdm(mask_modes.items(), desc="Mask Modes", leave=False):
                 for parameter in parameters:
                     start_time = time.time()
@@ -143,9 +173,9 @@ def main_multi(index_list, show):
                             alpha=alpha, 
                             eta=eta, 
                             mask_mode=mask_mode,
-                            early_stopping=True,
+                            early_stopping=False,
                             show=show
-                            )
+                        )
                     else:
                         success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
                             algo=algo, 
@@ -154,9 +184,9 @@ def main_multi(index_list, show):
                             mask_mode=mask_mode, 
                             early_stopping=False,
                             show=show,
-                            **{mask_mode: parameter})
+                            **{mask_mode: parameter}
+                        )
                     run_time = round(time.time() - start_time,3)
-
                     for step, success_rate in success_rate_dict.items():
                         new_row = pd.DataFrame({
                             'index': index,
@@ -172,22 +202,83 @@ def main_multi(index_list, show):
                             'success_rate': success_rate,
                             'loss': loss_dict[step],
                             'run_time': run_time,    
-                           },
-                        index=[0])
-                        if results.empty:
-                            results = new_row
-                        else:
-                            results = pd.concat([results, new_row], ignore_index=True)
+                        }, index=[0])
+                        results = pd.concat([results, new_row], ignore_index=True)
         torch.cuda.empty_cache()
-    results.to_excel(os.path.join(root, f'{model_str}_{save_result_file}'), index=False)
+        # 保存每个 index 的结果
+        results.to_excel(os.path.join(result_dir, f'results_{index}.xlsx'), index=False)
 
+def main_single(index_list, show):
+    num_gpus = torch.cuda.device_count()
+    device_ids = [i for i in range(num_gpus)]
+    
+    _, _, _, _, data_root, save_result_file = parameter_test_single()
+    result_dir = os.path.join(data_root, 'results')
+    
+    # 将 index_list 平均分配给每个 GPU
+    index_chunks = [index_list[i::num_gpus] for i in range(num_gpus)]
+    processes = []
+    
+    for device_id, indices in zip(device_ids, index_chunks):
+        p = multiprocessing.Process(target=process_indices_single, args=(indices, device_id, show))
+        p.start()
+        processes.append(p)
+    
+    for p in processes:
+        p.join()
+    
+    # 在主进程中合并所有结果文件
+    combined_results = pd.DataFrame()
+    for filename in os.listdir(result_dir):
+        if filename.endswith('.xlsx'):
+            file_path = os.path.join(result_dir, filename)
+            df = pd.read_excel(file_path)
+            combined_results = pd.concat([combined_results, df], ignore_index=True)
+
+    # 保存合并后的结果文件
+    combined_results.to_excel(os.path.join(data_root, save_result_file), index=False)
+    os.system(f'rm -r {result_dir}')
+        
+def main_multi(index_list, show):
+    num_gpus = torch.cuda.device_count()
+    device_ids = [i for i in range(num_gpus)]
+    
+    _, _, _, _, _, _, data_root, save_result_file = parameter_test_multi()
+    result_dir = os.path.join(data_root, 'results')
+    
+    # 将 index_list 平均分配给每个 GPU
+    index_chunks = [index_list[i::num_gpus] for i in range(num_gpus)]
+    processes = []
+    
+    for device_id, indices in zip(device_ids, index_chunks):
+        p = multiprocessing.Process(target=process_indices_multi, args=(indices, device_id, show))
+        p.start()
+        processes.append(p)
+    
+    for p in processes:
+        p.join()
+    
+    # 在主进程中合并所有结果文件
+    combined_results = pd.DataFrame()
+    for filename in os.listdir(result_dir):
+        if filename.endswith('.xlsx'):
+            file_path = os.path.join(result_dir, filename)
+            df = pd.read_excel(file_path)
+            combined_results = pd.concat([combined_results, df], ignore_index=True)
+
+    # 保存合并后的结果文件
+    combined_results.to_excel(os.path.join(data_root, save_result_file), index=False)
+    os.system(f'rm -r {result_dir}')
+    
 
 if __name__ == '__main__':
-    mode = 'multi' # 'single'
+    multiprocessing.set_start_method('spawn', force=True)
+    # mode = 'single' 
+    mode = 'multi' 
     show = False
     # 选出来的类别
-    # index_list = ['1', '512', '569', '642', '959', '680', '314', '468', '382', '460', '782']
-    index_list = ['1']
+    index_list = ['1', '512', '569', '642', '959', '680', '314', '468', '382', '460', '782']
+    # index_list = ['1', '512']
     
     t0 = time.time()
     if mode == 'single':
