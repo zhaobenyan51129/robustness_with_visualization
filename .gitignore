@@ -15,4 +15,6 @@ __pycache__/
 *.rar
 *.tar.gz
 *.ipynb
-!data_analysis.ipynb
+!data_analysis_one_step.ipynb
+!data_analysis_multi_step.ipynb
+!data_analysis_classified.ipynb

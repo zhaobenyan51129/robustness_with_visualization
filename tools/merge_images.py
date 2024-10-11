@@ -125,8 +125,22 @@ def main_gauss():
     ]
     return image_paths, data_root
 
+def main_vis_multi_gradcam():
+    data_root = './data_stage2/vis_multi_step_1008_16/vit_b_16'
+    image_paths = [
+        f'{data_root}/topr/0.2/grad_cam_step299.png',
+        f'{data_root}/randomr/0.2/grad_cam_step299.png',
+        f'{data_root}/lowr/0.8/grad_cam_step299.png',
+        
+        # f'{data_root}/topr/0.2/delta_step299.png',
+        # f'{data_root}/randomr/0.2/delta_step299.png',
+        # f'{data_root}/lowr/0.8/delta_step299.png',
+    ]
+    return image_paths, data_root
+
 if __name__ == '__main__':
     # image_paths, data_root = main_vis_single_para()
     # image_paths, data_root = main_vis_single_all()
-    image_paths, data_root = main_gauss()
-    merge_images(image_paths, 1, 3, dir_out=data_root, save_name='merged.png')
+    # image_paths, data_root = main_gauss()
+    image_paths, data_root = main_vis_multi_gradcam()
+    merge_images(image_paths, 1, 3, dir_out=data_root, save_name='merged_gradcam.png')
