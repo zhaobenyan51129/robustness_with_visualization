@@ -1,6 +1,7 @@
 imagenet/
 data/*
 data_stage2/*
+data_stage3/*
 !data/imagenet_class_index.json
 !data/chinese_class_index.json
 __pycache__/

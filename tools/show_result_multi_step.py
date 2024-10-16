@@ -98,8 +98,8 @@ def plot_success_rate_vs_r(data, var, label_list, **kwargs):
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
     mask_mode_list = df_filtered['mask_mode'].unique()
     
-    ncols = len(label_list)
-    nrows = len(model_list)
+    ncols = kwargs.get('ncols', len(label_list))
+    nrows = kwargs.get('nrows', len(model_list))
 
     sns.set(style="whitegrid")
     palette = sns.color_palette("tab10", n_colors=len(mask_mode_list))

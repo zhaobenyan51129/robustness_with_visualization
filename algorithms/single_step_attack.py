@@ -11,7 +11,7 @@ sys.path.append(BASE_DIR)
 from visualization.grad_cam import GradCAM, show_cam_on_image
 from visualization.reshape_tranform import ReshapeTransform
 from tools.get_classes import get_classes_with_index
-from tools.show_images import visualize_masks_overlay, show_images, show_pixel_distribution
+from tools.show_images import visualize_masks_overlay, show_images, show_pixel_distribution, visualize_gradients
 from models.load_model import load_model
 from algorithms.single_step_wrapper import *
 
@@ -41,7 +41,7 @@ def run_grad_cam(model, images, labels, target_layers, reshape_transform, use_cu
     return grayscale_cam, vis
 
 class OneStepAttack:
-    def __init__(self, model_str, images, labels, root):
+    def __init__(self, model_str, images, labels, root, **kwargs):
         self.model_str = model_str
         self.model = load_model(model_str)
         self.root = root
@@ -69,6 +69,9 @@ class OneStepAttack:
             self.use_cuda = True
         else:
             self.use_cuda = False 
+        
+        self.ncols = kwargs.get('ncols', None)
+        self.nrows = kwargs.get('nrows', None)
 
     def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, show = False, **kwargs):
         '''对模型进行单步法攻击
@@ -103,7 +106,7 @@ class OneStepAttack:
         loss_fn = nn.CrossEntropyLoss()
         ori_loss = loss_fn(output, self.labels)
         ori_loss.backward()
-        original_loss = - round(ori_loss.item(), 3)
+        original_loss = round(ori_loss.item(), 3)
         self.grad = delta.grad.detach().clone()
         
         # 根据mask_mode选择掩码生成方式
@@ -118,8 +121,10 @@ class OneStepAttack:
         
         if show:
             titles = [f'{i+1}:{self.original_classes[i]}' for i in range(len(self.original_classes))]
-            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, save_name='mask_overlay_visualization.png')
-        
+            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, save_name='mask_overlay_visualization.png',nrows=self.nrows, ncols=self.ncols)
+            visualize_gradients(self.grad, titles=titles, output_path=save_path, save_name='ori_grad_visualization.png',nrows=self.nrows, ncols=self.ncols)
+            
+            
         # 生成扰动并应用掩码
         perturbations = generate_perturbations(algo, eta_list, self.grad)
         perturbations = [perturbation * mask for perturbation in perturbations]
@@ -136,10 +141,12 @@ class OneStepAttack:
         attack_ratio_per_channel = attacked_pixels_per_channel / total_pixels_per_channel
         attack_ratio_per_channel = [round(x, 4) for x in attack_ratio_per_channel.tolist()]
         
-        # 计算每张图片每个通道被攻击的像素比例
-
+        # 每个扰动下的预测损失: pred_loss = original_loss + grad * perturbation
+        pred_loss_dict = {eta:original_loss + (perturbation * self.grad).sum().item() for eta, perturbation in zip(eta_list, perturbations)}
+        
         success_rate_dict = {}
-        loss_dict_attacked = {}  # 用于存储每个扰动下的攻击后损失
+        loss_dict_attacked = {}  # 用于存储每个扰动下的攻击后实际的损失
+        
         
         for i, eta in enumerate(eta_list):
             # 获取对应的对抗样本
@@ -149,36 +156,48 @@ class OneStepAttack:
             adv_output = self.model(adv_image)
             adv_loss = loss_fn(adv_output, self.labels)
             loss_attacked = adv_loss.item()  # 获取标量损失值
-            loss_dict_attacked[eta] = - round(loss_attacked, 3)  # 保存攻击后的损失
+            loss_dict_attacked[eta] = round(loss_attacked, 6)  # 保存攻击后的损失,正数
             
             # 计算成功率
             pred = adv_output.argmax(dim=1)
             success_rate = (pred != self.labels).float().mean().item()
             success_rate_dict[eta] = success_rate
-            
+    
             # 画图
             if show:
                 adv_classes = get_classes_with_index(pred)
                 
                 titles = [f'{i+1}:{original}/{pred}' if original != pred else f'{i+1}:{original}' for i, (original, pred) in enumerate(zip(self.original_classes, adv_classes))]
-                main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict_attacked[eta]}'
+                
+                # main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict_attacked[eta]}'
+                main_title = None
+                
                 # 被攻击之后的图片
-                show_images(self.adv_images[i], output_path=save_path, save_name=f'adv_images_eta{round(eta,2)}.png', titles=titles, main_title=main_title)
+                show_images(self.adv_images[i], output_path=save_path, save_name=f'adv_images_eta{round(eta,2)}.png', titles=titles, main_title=main_title, nrows=self.nrows, ncols=self.ncols)
                 # 扰动图像
-                show_images(perturbations[i], output_path=save_path, save_name=f'perturbations_eta{round(eta,2)}.png', titles=titles, main_title=main_title)
+                show_images(perturbations[i], output_path=save_path, save_name=f'perturbations_eta{round(eta,2)}.png', titles=titles, main_title=main_title, nrows=self.nrows, ncols=self.ncols)
                 
                 # 扰动分布以及一范数和二范数
                 norm1 = round(perturbations[i].abs().sum().cpu().item(), 4)
                 norm2 = round((perturbations[i] ** 2).sum().cpu().item(), 6)
-                main_title_per = f'eta: {eta}, L1: {norm1}, L2: {norm2}, success_rate: {success_rate:.2f}'
-                show_pixel_distribution(perturbations[i], output_path=save_path, save_name=f'perturbation_distribution_eta{round(eta,2)}.png', titles=titles, main_title=main_title_per)
-                
+                # main_title_per = f'eta: {eta}, L1: {norm1}, L2: {norm2}, success_rate: {success_rate:.2f}'
+                main_title_per = None
+                # show_pixel_distribution(perturbations[i], output_path=save_path, save_name=f'perturbation_distribution_eta{round(eta,2)}.png', titles=titles, main_title=main_title_per,nrows=self.nrows, ncols=self.ncols)
                 
                 # 像素分布
-                show_pixel_distribution(adv_image, output_path=save_path,titles=titles, save_name=f'pixel_distribution_eta{round(eta,2)}.png', main_title=main_title)
+                # show_pixel_distribution(adv_image, output_path=save_path,titles=titles, save_name=f'pixel_distribution_eta{round(eta,2)}.png', main_title=main_title, nrows=self.nrows, ncols=self.ncols)
+                
                 # Grad-CAM
                 _, vis = run_grad_cam(self.model, self.adv_images[i], pred, self.target_layers, self.reshape_transform, self.use_cuda)
-                show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_eta{round(eta,2)}.png', main_title=main_title)
+                show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_eta{round(eta,2)}.png', main_title=main_title, nrows=self.nrows, ncols=self.ncols)
+                
+                # 梯度可视化
+                # 再次计算adv_image的梯度
+                self.model.zero_grad()
+                adv_loss.backward()
+                grad = adv_image.grad.detach().clone()
+                visualize_gradients(grad, titles=titles, output_path=save_path, save_name=f'adv_grad_visualization_eta{round(eta,2)}.png', nrows=self.nrows, ncols=self.ncols)
+                
   
-        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict
     

@@ -138,9 +138,26 @@ def main_vis_multi_gradcam():
     ]
     return image_paths, data_root
 
+def main_vis_ppt():
+    data_root = './data_stage3/vis_single_step_attack_1013/vit_b_16'
+    image_paths = [
+        
+        f'{data_root}/original_images.png',
+        # f'{data_root}/pixel_distribution.png',
+        f'{data_root}/fgsm/cam_topr/0.15/ori_grad_visualization.png',
+        f'{data_root}/ori_grad_cam.png',
+        f'{data_root}/fgsm/cam_topr/0.15/mask_overlay_visualization.png',
+        f'{data_root}/fgsm/cam_topr/0.15/perturbations_eta0.01.png',
+        f'{data_root}/fgsm/cam_topr/0.15/adv_images_eta0.01.png',
+        f'{data_root}/fgsm/cam_topr/0.15/adv_grad_visualization_eta0.01.png',
+        f'{data_root}/fgsm/cam_topr/0.15/grad_cam_eta0.01.png',
+        
+    ]
+    return image_paths, data_root
+
 if __name__ == '__main__':
     # image_paths, data_root = main_vis_single_para()
     # image_paths, data_root = main_vis_single_all()
     # image_paths, data_root = main_gauss()
-    image_paths, data_root = main_vis_multi_gradcam()
-    merge_images(image_paths, 1, 3, dir_out=data_root, save_name='merged_gradcam.png')
+    image_paths, data_root = main_vis_ppt()
+    merge_images(image_paths, 1, 8, dir_out=data_root, save_name='merged_ppt.png')

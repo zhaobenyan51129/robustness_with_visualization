@@ -28,8 +28,9 @@ def show_images(imgs, **kwargs):
     main_title = kwargs.get('main_title', None)
 
     batch_size = imgs.shape[0]
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
+    num_rows = kwargs.get('nrows',int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols',int(np.ceil(batch_size / num_rows)))
+    
     figsize = (num_cols * scale, (num_rows) * scale)
     fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
     fig.suptitle(main_title, fontsize=16) 
@@ -64,6 +65,7 @@ def show_images(imgs, **kwargs):
     else:
         plt.show()
     
+
 def show_pixel_distribution(imgs, **kwargs):
     '''显示像素分布
 
@@ -82,17 +84,44 @@ def show_pixel_distribution(imgs, **kwargs):
     scale = kwargs.get('scale', 1.5)
     main_title = kwargs.get('main_title', None)
     
-    batch_size = imgs.shape[0]
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
-    figsize = (num_cols * scale, (num_rows) * scale)
-    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
-    fig.suptitle(main_title, fontsize=16) 
+    # 确保 imgs 是 numpy 数组，并具有批次维度
+    if isinstance(imgs, torch.Tensor):
+        imgs = imgs.cpu().detach().numpy()
+    elif not isinstance(imgs, np.ndarray):
+        imgs = np.array(imgs)
 
-    for i, ax in enumerate(axs.flat):
+    if imgs.ndim == 3:
+        imgs = imgs[np.newaxis, ...]  # 添加批次维度
+
+    batch_size = imgs.shape[0]
+    num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
+    figsize = (num_cols * scale, num_rows * scale)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
+    if main_title:
+        fig.suptitle(main_title, fontsize=16) 
+
+    # 确保 axs 是一维可迭代对象
+    if isinstance(axs, np.ndarray):
+        axs = axs.flatten()
+    elif isinstance(axs, (list, tuple)):
+        pass  # axs 已经是可迭代的
+    else:
+        axs = [axs]  # 将单个 Axes 对象放入列表
+
+    for i, ax in enumerate(axs):
         if i < len(imgs):  # 确保索引不超出范围
-            ax.hist(imgs[i].detach().cpu().numpy().flatten(), bins=100)
-            if titles is not None:
+            image = imgs[i]
+            if isinstance(image, torch.Tensor):
+                image = image.detach().cpu().numpy()
+            if image.ndim == 3:  # 如果是 (H, W, C)，展开为一维
+                image = image.flatten()
+            elif image.ndim == 4:  # 如果是 (C, H, W)，转换为 (H, W, C)
+                image = image.transpose(1, 2, 0).flatten()
+            else:
+                image = image.flatten()
+            ax.hist(image, bins=100)
+            if titles is not None and len(titles) > i:
                 if '/' in titles[i]:
                     ax.set_title(titles[i], fontsize=6, color='red')
                 else:
@@ -108,6 +137,8 @@ def show_pixel_distribution(imgs, **kwargs):
         plt.close()
     else:
         plt.show()
+
+
         
 def show_gradient_distribution(gradients, **kwargs):
     '''Display gradient distributions.
@@ -128,8 +159,8 @@ def show_gradient_distribution(gradients, **kwargs):
     main_title = kwargs.get('main_title', 'Gradient Distributions')
     
     batch_size = gradients.shape[0]
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
+    num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
     figsize = (num_cols * scale, num_rows * scale)
     fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
     fig.suptitle(main_title, fontsize=16)
@@ -176,12 +207,12 @@ def visualize_masks_overlay(images, masks, **kwargs):
     output_path = kwargs.get('output_path', None)
     save_name = kwargs.get('save_name', 'mask_overlay_visualization.png')
     scale = kwargs.get('scale', 1.5)
-    main_title = kwargs.get('main_title', 'Mask Overlay Visualization')
+    main_title = kwargs.get('main_title', None)
 
     batch_size = images.shape[0]
 
-    num_rows = int(np.ceil(np.sqrt(batch_size)))
-    num_cols = int(np.ceil(batch_size / num_rows))
+    num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
 
     figsize = (num_cols * scale, num_rows * scale)
     fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
@@ -208,12 +239,10 @@ def visualize_masks_overlay(images, masks, **kwargs):
                     ax.set_title(titles[i], fontsize=8, color='red')
                 else:
                     ax.set_title(titles[i], fontsize=8)
-            else:
-                ax.set_title(f'{i+1}')
         else:
             ax.axis('off')
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout()
     if output_path:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
@@ -222,4 +251,79 @@ def visualize_masks_overlay(images, masks, **kwargs):
         plt.close()
     else:
         plt.show()
+
+
+def visualize_gradients(gradients, **kwargs):
+    '''
+    可视化梯度的热力图。
+
+    Args:
+        gradients: [batch, 3, H, W] 的张量，表示梯度。
+        kwargs: 可选参数，包括：
+            - titles: 每个图像的标题列表。
+            - output_path: 保存输出图像的路径。
+            - save_name: 保存的图像文件名。
+            - scale: 图像大小的缩放因子。
+            - main_title: 图像的主标题。
+            - cmap: 热力图的颜色映射，默认为 'viridis'。
+    '''
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', 'gradient_heatmaps.png')
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', None)
+    cmap = kwargs.get('cmap', 'viridis')
+
+    # 将梯度转换为 numpy 数组
+    if isinstance(gradients, torch.Tensor):
+        gradients = gradients.detach().cpu().numpy()
+
+    batch_size = gradients.shape[0]
+    num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
+
+    figsize = (num_cols * scale, num_rows * scale)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
+
+    if main_title:
+        fig.suptitle(main_title, fontsize=16)
+
+    # 确保 axs 是一维数组
+    if isinstance(axs, np.ndarray):
+        axs = axs.flatten()
+    else:
+        axs = np.array([axs])  # 将单个 Axes 对象转换为数组
+
+    for idx in range(batch_size):
+        grad = gradients[idx]
+        grad_abs = np.abs(grad)
+        # 按通道求和，得到单通道梯度
+        grad_sum = np.sum(grad_abs, axis=0)  # 形状：[H, W]
+        grad_norm = grad_sum / (grad_sum.max() + 1e-8)
+        ax = axs[idx]
+        im = ax.imshow(grad_norm, cmap=cmap)
+        ax.axis('off')
+        if titles is not None:
+            if '/' in titles[idx]:
+                ax.set_title(titles[idx], fontsize=8, color='red')
+            else:
+                ax.set_title(titles[idx], fontsize=8)
+
+    for idx in range(batch_size, len(axs)):
+        axs[idx].axis('off')
+
+    # 添加颜色条
+    # fig.colorbar(im, ax=axs[:batch_size], orientation='vertical', fraction=0.02, pad=0.04)
+
+    plt.tight_layout()
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        plt.savefig(os.path.join(output_path, save_name), dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
+
+
 

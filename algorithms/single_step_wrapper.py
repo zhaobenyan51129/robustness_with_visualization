@@ -83,13 +83,15 @@ def compute_output_grad(model, X, y):
 # -------------------- step2: 计算需要保留梯度的pixel --------------------
 def grad_mask(grad, mode = None, **kwargs):
     '''对梯度进行掩码处理，生成于原始梯度相同形状的掩码，用于标记要修改的像素
-    Args:mode
-        'all': 返回全为1的掩码
-        'positive': 梯度的正值为1，负值为0
-        'negative': 梯度的负值为1，正值为0
-        'topr':r为改变的pixel的比例，需要传入参数topr
-        'randomr':随机选择randomr比例的像素，其余值置为0
-        'channel_randomr':随机选择randomr比例的像素，但是3个通道最多只能有一个通道为1
+    Args:
+        grad: 梯度，[batch_size, channel, height, width], tensor
+        mode:
+            'all': 返回全为1的掩码
+            'positive': 梯度的正值为1，负值为0
+            'negative': 梯度的负值为1，正值为0
+            'topr':r为改变的pixel的比例，需要传入参数topr
+            'randomr':随机选择randomr比例的像素，其余值置为0
+            'channel_randomr':随机选择randomr比例的像素，但是3个通道最多只能有一个通道为1
     Return:
         mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
         num_attacked: 要修改的像素数
@@ -105,8 +107,12 @@ def grad_mask(grad, mode = None, **kwargs):
         'negative': grad_mask_negative,
         'topr': grad_mask_topr,
         'lowr': grad_mask_lowr,
+        'channel_topr': grad_mask_channel_topr,
+        'channel_lowr': grad_mask_channel_lowr,
         'randomr': grad_mask_randomr,
         'channel_randomr': grad_mask_channel_randomr,
+        'seed_randomr': grad_mask_seed_randomr,
+        'seed_randomr_lowr': grad_mask_seed_lowr_randomr
     }
     mask, num_attacked = mode_dict[mode](grad, **kwargs)
     return mask, num_attacked
@@ -152,6 +158,26 @@ def grad_mask_topr(grad, topr = 0.1):
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels
 
+def grad_mask_channel_topr(grad, channel_topr = 0.1):
+    '''将梯度(batch,3,224,224)的每一个像素位置的三个channel的值的二范数得到grad_channel(batch,224,224)，然后按照topr比例选取grad_channel'''
+    grad = grad.abs()
+    batch_size, channels, height, width = grad.shape
+    grad_channel = torch.norm(grad, p=2, dim=1)# (batch,224,224)
+    num_change_pixels = int(height * width * channel_topr)
+    top_array = compute_top_indics(grad_channel, num_change_pixels)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels * channels
+
+def grad_mask_channel_lowr(grad, channel_lowr = 0.1):
+    '''将梯度(batch,3,224,224)的每一个像素位置的三个channel的值的二范数得到grad_channel(batch,224,224)，然后按照lowr比例选取grad_channel'''
+    grad = grad.abs()
+    batch_size, channels, height, width = grad.shape
+    grad_channel = torch.norm(grad, p=2, dim=1)# (batch,224,224)
+    num_change_pixels = int(height * width * channel_lowr)
+    top_array = compute_top_indics(grad_channel, num_change_pixels, ascending=True)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels * channels
+
 def grad_mask_lowr(grad, lowr = 0.1):
     '''lowr为改变的pixel的比例，梯度绝对值后lowr比例的为1，其余为0'''
     grad = grad.abs()
@@ -171,6 +197,50 @@ def grad_mask_randomr(grad, randomr=0.1):
         rand_indices = torch.randperm(grad_view.shape[1])[:num_change_pixels]
         mask[i, rand_indices] = 1  # set the selected pixels to 1
     mask = mask.view_as(grad)
+    return mask, num_change_pixels
+
+def grad_mask_seed_randomr(grad, seed_randomr=0.1):
+    '''随机选择randomr比例的像素，其余值置为0,并返回被修改的pixel数'''
+    # 保存当前的随机种子状态
+    current_state = torch.get_rng_state()
+    
+    # 设置新的随机种子
+    seed=42
+    torch.manual_seed(seed)
+    
+    batch_size = grad.shape[0]
+    grad_view = grad.view(batch_size, -1)  
+    mask = torch.zeros_like(grad_view)
+    num_change_pixels = int(grad_view.shape[1] * seed_randomr)
+    for i in range(batch_size):
+        rand_indices = torch.randperm(grad_view.shape[1])[:num_change_pixels]
+        mask[i, rand_indices] = 1  # set the selected pixels to 1
+    mask = mask.view_as(grad)
+    
+    # 恢复原来的随机种子状态
+    torch.set_rng_state(current_state)
+    
+    return mask, num_change_pixels
+
+def grad_mask_seed_lowr_randomr(grad, seed_randomr_lowr=0.1):
+    '''随机选择randomr比例的像素，其余值置为0,并返回被修改的pixel数'''
+    # 保存当前的随机种子状态
+    current_state = torch.get_rng_state()
+    
+    # 设置新的随机种子
+    seed=42
+    torch.manual_seed(seed)
+    batch_size = grad.shape[0]
+    grad_view = grad.view(batch_size, -1)  
+    mask = torch.ones_like(grad_view) # 全1掩码
+    num_change_pixels = int(grad_view.shape[1] * seed_randomr_lowr)
+    num_all_pixels = grad_view.shape[1]
+    for i in range(batch_size):
+        rand_indices = torch.randperm(grad_view.shape[1])[:(num_all_pixels - num_change_pixels)]
+        mask[i, rand_indices] = 0  # set the selected pixels to 0
+    mask = mask.view_as(grad)
+    # 恢复原来的随机种子状态
+    torch.set_rng_state(current_state)
     return mask, num_change_pixels
 
 def grad_mask_channel_randomr(grad, channel_randomr=0.1):

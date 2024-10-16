@@ -19,7 +19,7 @@ else:
 def plot_success_rate_vs_eta(data, algo_list, var_list, **kwargs):
     '''
     对每一组 algo 和 var 画一个子图。
-    
+
     Args:
         data (pd.DataFrame): 数据集
         algo_list (list): 算法列表
@@ -27,49 +27,83 @@ def plot_success_rate_vs_eta(data, algo_list, var_list, **kwargs):
     '''
     output_path = kwargs.get('output_path', None)
     save_name = kwargs.get('save_name', None)
-    
+
     num_plots = len(algo_list) * len(var_list)
-    nrows = int(np.ceil(np.sqrt(num_plots)))
-    ncols = int(np.ceil(num_plots / nrows))
-    
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 6, nrows * 4), squeeze=False)
+
+    nrows = kwargs.get('nrows', int(np.ceil(np.sqrt(num_plots))))
+    ncols = kwargs.get('ncols', int(np.ceil(num_plots / nrows)))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 7, nrows * 4), squeeze=False)
     axes = axes.flatten()
-    
+
     plot_idx = 0
     for algo in algo_list:
         for var in var_list:
             df_filtered = data[data['algo'] == algo].copy()
-            df_filtered['model_mask'] = df_filtered['model'] + ' - ' + df_filtered['mask_mode']
             df_filtered['success_rate'] = df_filtered['success_rate'] * 100
 
-            palette = sns.color_palette("tab10", n_colors=df_filtered['model_mask'].nunique())
             ax = axes[plot_idx]
+
+            # 获取唯一的模型和掩码模式列表
+            models = df_filtered['model'].unique()
+            mask_modes = df_filtered['mask_mode'].unique()
+
+            # 为不同的 mask_mode 指定不同的颜色
+            palette = sns.color_palette("tab10", n_colors=len(mask_modes))
+            mask_mode_colors = dict(zip(mask_modes, palette))
+
+            # 为不同的模型指定不同的线型和标记
+            line_styles = ['-', '--', '-.', ':']
+            markers = ['o', '^', 'X', 'h', '*', 'v', 's', 'p', 'D',  'd']
+
+            # 创建模型到线型和标记的映射
+            model_line_styles = {model: line_styles[i % len(line_styles)] for i, model in enumerate(models)}
+            model_markers = {model: markers[i % len(markers)] for i, model in enumerate(models)}
+
+            # 准备 dashes 映射，Seaborn 需要 dash 样式为点划线序列
+            dash_styles = {
+                '-': '',             # 实线
+                '--': (5, 5),        # 虚线
+                ':': (1, 3),          # 点线
+                '-.': (3, 5, 1, 5),  # 点划线
+                
+            }
+            model_dashes = {model: dash_styles[model_line_styles[model]] for model in models}
+
+            # 准备 markers 映射
+            model_markers_mapping = {model: model_markers[model] for model in models}
+
+            # 绘制图形
             sns.lineplot(
                 data=df_filtered,
                 x='eta',
                 y=var,
-                hue='model_mask',
-                style='model',  # 使用不同的线型
-                palette=palette,
-                markers=True,
-                dashes=True,
+                hue='mask_mode',      # 使用不同的颜色
+                style='model',        # 使用不同的线型
+                markers=model_markers_mapping,
+                dashes=model_dashes,
+                hue_order=mask_modes,
+                style_order=models,
+                palette=mask_mode_colors,
                 ax=ax
             )
+
             ax.set_title(f'{var.title()} vs Eta for {algo}', fontsize=12)
-            ax.set_xlabel('eta', fontsize=8)
-            ax.set_ylabel(f'{var.title()}', fontsize=8)
-            
+            ax.set_xlabel('eta', fontsize=10)
+            ax.set_ylabel(f'{var.title()}', fontsize=10)
+
             # 只在第一个子图中显示图例
             if plot_idx == 0:
                 ax.legend(title='Model - Mask Mode', bbox_to_anchor=(1.05, 1), loc='upper left')
             else:
                 ax.legend().set_visible(False)
-            
+
             plot_idx += 1
-    
+
     # 隐藏多余的子图
     for idx in range(plot_idx, len(axes)):
         axes[idx].axis('off')
+
     plt.tight_layout()
     if output_path and save_name:
         plt.savefig(f'{output_path}/{save_name}.png', dpi=300)
@@ -237,12 +271,13 @@ def plot_success_rate_vs_r(data, eta, algo, var, label_list, **kwargs):
     df_filtered = df_filtered.reset_index(drop=True)
     
     # 获取唯一的模型和mask_mode
-    model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    model_list = kwargs.get('model_list', ['vit_b_16', 'resnet50', 'vgg16'])
     mask_mode_list = df_filtered['mask_mode'].unique()
     
     picture_num = len(model_list) * len(label_list)
-    ncols = int(np.ceil(np.sqrt(picture_num)))
-    nrows = int(np.ceil(picture_num / ncols))
+    
+    ncols = kwargs.get('ncols', int(np.ceil(np.sqrt(picture_num))))
+    nrows = kwargs.get('nrows', int(np.ceil(picture_num / ncols)))
 
     sns.set(style="whitegrid")
     palette = sns.color_palette("tab10", n_colors=len(mask_mode_list))
@@ -272,7 +307,7 @@ def plot_success_rate_vs_r(data, eta, algo, var, label_list, **kwargs):
             ax.set_xlabel(f'{var}', fontsize=10)
             ax.set_ylabel(label, fontsize=10)
             ax.tick_params(axis='x')
-            if j != len(label_list) - 1:
+            if j == 0:
                 ax.legend(title='Mask Mode', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
             else:
                 ax.get_legend().remove()

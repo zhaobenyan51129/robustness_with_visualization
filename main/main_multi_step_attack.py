@@ -19,25 +19,28 @@ def parameter_total():
     algo_list = ['i_fgsm']
     eta_list = [0.01]
     alpha_list = [1e-4]
-    steps = 500
+    steps = 300
     show = False
     mask_modes = {
         'positive': [None],
         'negative': [None],
         'all': [None],
-        'topr': np.arange(0.1, 1, 0.1),
-        'lowr': np.arange(0.1, 1, 0.1),
-        'randomr': np.arange(0.1, 1, 0.1),
-        # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
-        # 'cam_topr': np.arange(0.1, 1, 0.1),
-        # 'cam_lowr': np.arange(0.1, 1, 0.1),
+        'topr': np.arange(0.05, 1, 0.05),
+        'lowr': np.arange(0.05, 1, 0.05),
+        'channel_topr': np.arange(0.05, 1, 0.05),
+        'channel_lowr': np.arange(0.05, 1, 0.05),
+        'randomr': np.arange(0.05, 1, 0.05),
+        'seed_randomr': np.arange(0.05, 1, 0.05),
+        'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
+        'cam_topr': np.arange(0.05, 1, 0.05),
+        'cam_lowr': np.arange(0.05, 1, 0.05),
     }
 
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    # model_list = ['vgg16']
-    data_root = './data_stage2/multi_step_total100_0918'
-    dataset_file = './data/images_100_0911.pth'
-    save_result_file = 'result_multi_step_total100_0918.xlsx'
+    # model_list = ['vit_b_16']
+    data_root = './data_stage3/multi_step_total100_1016'
+    dataset_file = './data_stage2/images_100_0911.pth'
+    save_result_file = 'result_multi_step_total100_1016.xlsx'
     return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
 
 def parameter_vis():
@@ -52,62 +55,73 @@ def parameter_vis():
         # 'all': [None],
         'topr': [0.2],
         'lowr': [0.8],
-        'randomr':  [0.2],
-        # 'channel_randomr': np.arange(0.05, 0.3, 0.05),
+        'channel_topr': [0.2],
+        'channel_lowr': [0.8],
+        # 'randomr':  [0.2],
+        # 'seed_randomr': [0.2],
+        # 'seed_randomr_lowr': [0.8],
         # 'cam_topr': [0.2],
         # 'cam_lowr': [0.8],
  }
 
     model_list = ['vit_b_16'] # ['vit_b_16', 'resnet50', 'vgg16']
-    data_root = './data_stage2/vis_multi_step_1008_16'
+    data_root = './data_stage3/vis_multi_step_1013'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'vis_result_multi_step_1008.xlsx'
+    save_result_file = 'vis_result_multi_step_1013.xlsx'
     return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
 
         
 def main():
-    # algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_total()
+    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_total()
     
-    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_vis()
+    # algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_vis()
     
     print(f'data_root is {data_root}')
     
     dataset = CustomDataset(dataset_file)
-    dataset = torch.utils.data.Subset(dataset, range(16)) # 验证阶段，取16张
+    # dataset = torch.utils.data.Subset(dataset, range(16)) # 验证阶段，取16张
     dataloader = DataLoader(dataset, batch_size=64, shuffle=False)
     
+    # id_list = [0, 11, 3, 7, 8, 9, 10, 13]
+    ncols = None
+    nrows = None
+    # dataset = torch.utils.data.Subset(dataset, id_list)
+    # dataloader = DataLoader(dataset, batch_size=len(id_list), shuffle=False)
+    
     for model_str in tqdm(model_list, desc="Models"):
-        results = pd.DataFrame(columns=['model', 'algo', 'alpha', 'mask_mode', 'step','parameter', 'eta', 'success_rate', 'l1_norm', 'l2_norm', 'loss','run_time', 'batch_idx', 'batch_pictures'])
+        results = pd.DataFrame(columns=['model', 'algo', 'alpha', 'mask_mode', 'step','parameter', 'eta', 'success_rate', 'l1_norm', 'l2_norm', 'loss', 'pred_loss', 'run_time', 'batch_idx', 'batch_pictures'])
         
         root = os.path.join(data_root, model_str)
         make_dir(root)
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1):
             batch_pictures = images.size(0)
-            attacker = MultiStepAttack(model_str, images, labels, root, steps=steps)
+            attacker = MultiStepAttack(model_str, images, labels, root, steps=steps,nrows=nrows, ncols=ncols)
             if show:
-                titles = [f'{i+1}: {cls}' for i, cls in get_classes_with_index(attacker.labels)]
+                titles = [f'{i+1}: {cls}' for i, cls in enumerate(get_classes_with_index(attacker.labels))]
                 
                 _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
                 
-                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png', main_title='Ori_Grad-CAM')
+                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png', main_title= None, ncols=ncols, nrows=nrows)
+                
+                show_images(attacker.images, titles = titles, output_path=root, save_name='ori_images.png', main_title=None, ncols=ncols, nrows=nrows)
                 
             for algo in algo_list:
                 for eta in eta_list:
                     for alpha in alpha_list:
-                        for mask_mode, parameters in tqdm(mask_modes.items(), desc="Mask Modes", leave=False):
+                        for mask_mode, parameters in mask_modes.items():
                             for parameter in parameters:
                                 start_time = time.time()
                                 if parameter is None:
-                                   success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                                   success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
                                        algo=algo, 
                                        alpha=alpha, 
                                        eta=eta, 
                                        mask_mode=mask_mode,
-                                       early_stopping=True,
+                                       early_stopping=False,
                                        show=show
                                        )
                                 else:
-                                    success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                                    success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
                                         algo=algo, 
                                         alpha=alpha, 
                                         eta=eta, 
@@ -130,6 +144,7 @@ def main():
                                         'l1_norm': l1_norm_dict[step],
                                         'l2_norm': l2_norm_squre_dict[step],
                                         'loss': loss_dict[step],
+                                        'pred_loss': pred_loss_dict[step],
                                         'run_time': run_time, 
                                         'batch_idx': batch_idx, 
                                         'batch_pictures': batch_pictures},

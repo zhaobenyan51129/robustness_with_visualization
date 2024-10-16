@@ -8,7 +8,7 @@ sys.path.append(BASE_DIR)
 from algorithms.single_step_wrapper import *
 from tools.get_classes import get_classes_with_index
 from algorithms.single_step_attack import OneStepAttack, run_grad_cam, make_dir
-from tools.show_images import show_images, visualize_masks_overlay
+from tools.show_images import show_images, visualize_masks_overlay, visualize_gradients
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -16,8 +16,8 @@ else:
     device = torch.device('cpu')
 
 class MultiStepAttack(OneStepAttack):
-    def __init__(self, model_str, images, labels, root, steps=10):
-        super().__init__(model_str, images, labels, root)
+    def __init__(self, model_str, images, labels, root, steps=10, **kwargs):
+        super().__init__(model_str, images, labels, root, **kwargs)
         self.steps = steps
     
     def compute_loss_function(self, output, y, loss_mode):
@@ -76,6 +76,7 @@ class MultiStepAttack(OneStepAttack):
         # 初始化记录字典
         success_rate_dict = {}
         loss_dict = {}
+        pred_loss_dict = {}
         l1_norm_dict = {}
         l2_norm_square_dict = {}
         
@@ -103,9 +104,13 @@ class MultiStepAttack(OneStepAttack):
 
             # 计算损失值（交叉熵损失）
             loss = nn.CrossEntropyLoss()(output, self.labels)
-            loss_dict[t] = - round(loss.item(), 3)
+            loss_dict[t] = round(loss.item(), 6)
+            if t == 0:
+                original_loss = loss_dict[t]
             loss.backward()
             grad = delta.grad.detach().clone()
+            
+            pred_loss_dict[t] = original_loss + (delta * grad).sum().item()
             
             # 根据mask_mode生成掩码
             if mask_mode in ('cam_topr', 'cam_lowr'):
@@ -118,11 +123,14 @@ class MultiStepAttack(OneStepAttack):
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
             
             # 每隔100步画一次mask
-            if show and t % 100 == 0:
-                adv_classes = get_classes_with_index(pred)
-                titles = [f'{i+1}:{original}/{pred}' if original != pred else f'{i+1}:{original}' for i, (original, pred) in enumerate(zip(self.original_classes, adv_classes))]
-                main_title = f'success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
-                visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, main_title = main_title, save_name=f'mask_overlay_visualization_step{t}.png')
+            # if show and t % 100 == 0:
+            #     adv_classes = get_classes_with_index(pred)
+            #     titles = [f'{i+1}:{original}/{pred}' if original != pred else f'{i+1}:{original}' for i, (original, pred) in enumerate(zip(self.original_classes, adv_classes))]
+            #     main_title = f'success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
+                # visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, main_title = main_title, save_name=f'mask_overlay_visualization_step{t}.png', nrows=self.nrows, ncols=self.ncols)
+            if show and t == 0:
+                # 原始梯度
+                visualize_gradients(grad, output_path=save_path, save_name=f'ori_gradient.png', main_title=None, titles = get_classes_with_index(self.labels), nrows=self.nrows, ncols=self.ncols)
             
             # 计算被攻击pixel的梯度范数
             masked_grad = grad * mask
@@ -138,7 +146,7 @@ class MultiStepAttack(OneStepAttack):
                 delta.data = delta.data + alpha * mask * grad
             delta.data = torch.clamp(delta.data, -eta, eta)
             delta.grad.zero_()
- 
+            
             # 早停策略
             if early_stopping:
                 # 将当前的成功率和损失值添加到窗口中
@@ -173,13 +181,21 @@ class MultiStepAttack(OneStepAttack):
         if show: # 画出最后一步的可视化结果
             adv_classes = get_classes_with_index(pred)
             titles = [f'{i+1}:{original}/{pred}' if original != pred else f'{i+1}:{original}' for i, (original, pred) in enumerate(zip(self.original_classes, adv_classes))]
-            main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
+            
+            # main_title = f'{algo}, eta: {eta}, success_rate: {success_rate:.2f}, loss: {loss_dict[t]:.4f}'
+            main_title = None
+            
             # 扰动delta
-            show_images(delta, titles=titles, output_path=save_path, save_name=f'delta_step{t}.png', main_title=main_title)
+            show_images(delta, titles=titles, output_path=save_path, save_name=f'delta_step{t}.png', main_title=main_title, nrows=self.nrows, ncols=self.ncols)
             # 扰动后的图片
-            show_images(self.images + delta, titles=titles, output_path=save_path, save_name=f'adversarial_images_step{t}.png', main_title=main_title)
+            show_images(self.images + delta, titles=titles, output_path=save_path, save_name=f'adversarial_images_step{t}.png', main_title=main_title, nrows=self.nrows, ncols=self.ncols)
             # Grad-CAM
             _, vis = run_grad_cam(self.model, self.images + delta, pred, self.target_layers, self.reshape_transform, self.use_cuda)
-            show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_step{t}.png', main_title=main_title)
+            show_images(vis, titles = titles, output_path=save_path, save_name=f'grad_cam_step{t}.png', main_title=main_title, nrows=self.nrows, ncols=self.ncols)
+            # 梯度
+            visualize_gradients(grad, output_path=save_path, save_name=f'gradient_step{t}.png', main_title=main_title, titles = titles, nrows=self.nrows, ncols=self.ncols)
+            # mask
+            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, main_title = main_title, save_name=f'mask_overlay_visualization_step{t}.png', nrows=self.nrows, ncols=self.ncols)
             
-        return success_rate_dict, loss_dict, l1_norm_dict, l2_norm_square_dict
+            
+        return success_rate_dict, loss_dict, l1_norm_dict, l2_norm_square_dict, pred_loss_dict
