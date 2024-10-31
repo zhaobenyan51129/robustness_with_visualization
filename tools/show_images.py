@@ -28,19 +28,17 @@ def show_images(imgs, **kwargs):
     main_title = kwargs.get('main_title', None)
 
     batch_size = imgs.shape[0]
-    num_rows = kwargs.get('nrows',int(np.ceil(np.sqrt(batch_size))))
-    num_cols = kwargs.get('ncols',int(np.ceil(batch_size / num_rows)))
+    num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
+    num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
     
-    figsize = (num_cols * scale, (num_rows) * scale)
+    figsize = (num_cols * scale, num_rows * scale)
     fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
     fig.suptitle(main_title, fontsize=16) 
 
-    # 修改开始：确保axes是可迭代的
     if isinstance(axes, np.ndarray):
         axes = axes.flatten()
     else:
         axes = [axes]
-    # 修改结束
 
     for i, (ax, image) in enumerate(zip(axes, imgs)):
         if torch.is_tensor(image): # tensor
@@ -96,6 +94,15 @@ def show_pixel_distribution(imgs, **kwargs):
     batch_size = imgs.shape[0]
     num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
     num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
+    # num_rows = kwargs.get('nrows', None)
+    # num_cols = kwargs.get('ncols', None)
+
+    # batch_size = imgs.shape[0]
+    # if num_rows is None:
+    #     num_rows = int(np.ceil(np.sqrt(batch_size)))
+    # if num_cols is None:
+    #     num_cols = int(np.ceil(batch_size / num_rows))
+    
     figsize = (num_cols * scale, num_rows * scale)
     fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
     if main_title:
@@ -137,9 +144,7 @@ def show_pixel_distribution(imgs, **kwargs):
         plt.close()
     else:
         plt.show()
-
-
-        
+ 
 def show_gradient_distribution(gradients, **kwargs):
     '''Display gradient distributions.
 
