@@ -9,6 +9,7 @@ from algorithms.single_step_wrapper import *
 from tools.get_classes import get_classes_with_index
 from algorithms.single_step_attack import OneStepAttack, run_grad_cam, make_dir
 from tools.show_images import show_images, visualize_masks_overlay, visualize_gradients
+from algorithms.LRP.lrp import LRPModel
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -119,6 +120,11 @@ class MultiStepAttack(OneStepAttack):
                     self.target_layers, self.reshape_transform, self.use_cuda
                 )
                 mask, _ = cam_mask(grayscale_cam, mode=mask_mode, **kwargs)
+            elif mask_mode in ['lrp_lowr', 'lrp_topr'] and self.model_str == 'vgg16':
+                lrp_model = LRPModel(self.model)
+                relevance_scores = lrp_model.forward(self.images)
+                mask, pixel_attacked = lrp_mask(relevance_scores, mode=mask_mode, **kwargs)
+            
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)
             

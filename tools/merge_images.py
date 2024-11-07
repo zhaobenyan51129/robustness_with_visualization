@@ -155,9 +155,108 @@ def main_vis_ppt():
     ]
     return image_paths, data_root
 
+def main_picturues():
+    data_root = './data_stage3/vis_multi_step_1030/vit_b_16'
+    image_paths = [
+        # f'{data_root}/topr/0.2/mask_overlay_visualization_step299.png',
+        # f'{data_root}/channel_topr/0.2/mask_overlay_visualization_step299.png',
+        # f'{data_root}/cam_topr/0.2/mask_overlay_visualization_step299.png',
+        # f'{data_root}/seed_randomr/0.2/mask_overlay_visualization_step299.png',
+        # f'{data_root}/seed_randomr_lowr/0.8/mask_overlay_visualization_step299.png',
+        # f'{data_root}/cam_lowr/0.8/mask_overlay_visualization_step299.png',
+        # f'{data_root}/channel_lowr/0.8/mask_overlay_visualization_step299.png',
+        # f'{data_root}/lowr/0.8/mask_overlay_visualization_step299.png',
+        
+        # f'{data_root}/topr/0.2/delta_step299.png',
+        # f'{data_root}/channel_topr/0.2/delta_step299.png',
+        # f'{data_root}/cam_topr/0.2/delta_step299.png',
+        # f'{data_root}/seed_randomr/0.2/delta_step299.png',
+        # f'{data_root}/seed_randomr_lowr/0.8/delta_step299.png',
+        # f'{data_root}/cam_lowr/0.8/delta_step299.png',
+        # f'{data_root}/channel_lowr/0.8/delta_step299.png',
+        # f'{data_root}/lowr/0.8/delta_step299.png',
+        
+        # f'{data_root}/topr/0.2/adversarial_images_step299.png',
+        # f'{data_root}/channel_topr/0.2/adversarial_images_step299.png',
+        # f'{data_root}/cam_topr/0.2/adversarial_images_step299.png',
+        # f'{data_root}/seed_randomr/0.2/adversarial_images_step299.png',
+        # f'{data_root}/seed_randomr_lowr/0.8/adversarial_images_step299.png',
+        # f'{data_root}/cam_lowr/0.8/adversarial_images_step299.png',
+        # f'{data_root}/channel_lowr/0.8/adversarial_images_step299.png',
+        # f'{data_root}/lowr/0.8/adversarial_images_step299.png',
+        
+        # f'{data_root}/topr/0.2/grad_cam_step299.png',
+        # f'{data_root}/channel_topr/0.2/grad_cam_step299.png',
+        # f'{data_root}/cam_topr/0.2/grad_cam_step299.png',
+        # f'{data_root}/seed_randomr/0.2/grad_cam_step299.png',
+        # f'{data_root}/seed_randomr_lowr/0.8/grad_cam_step299.png',
+        # f'{data_root}/cam_lowr/0.8/grad_cam_step299.png',
+        # f'{data_root}/channel_lowr/0.8/grad_cam_step299.png',
+        # f'{data_root}/lowr/0.8/grad_cam_step299.png',
+        
+        f'{data_root}/topr/0.2/gradient_step299.png',
+        f'{data_root}/channel_topr/0.2/gradient_step299.png',
+        f'{data_root}/cam_topr/0.2/gradient_step299.png',
+        f'{data_root}/seed_randomr/0.2/gradient_step299.png',
+        f'{data_root}/seed_randomr_lowr/0.8/gradient_step299.png',
+        f'{data_root}/cam_lowr/0.8/gradient_step299.png',
+        f'{data_root}/channel_lowr/0.8/gradient_step299.png',
+        f'{data_root}/lowr/0.8/gradient_step299.png',
+        
+    ]
+    return image_paths, data_root
+
+def main_picturues1():
+    data_root = './data_stage3/paper_images/sample3/vis_single_step_attack'
+    image_paths = [
+        f'{data_root}/positive_None_mask_overlay.png',
+        f'{data_root}/negative_None_mask_overlay.png',
+        
+        f'{data_root}/topr_0.1_mask_overlay.png',
+        f'{data_root}/lowr_0.1_mask_overlay.png',
+        
+        f'{data_root}/channel_topr_0.1_mask_overlay.png',
+         f'{data_root}/channel_lowr_0.1_mask_overlay.png',
+         
+        f'{data_root}/cam_topr_0.1_mask_overlay.png',
+        f'{data_root}/cam_lowr_0.1_mask_overlay.png',
+        
+        f'{data_root}/lrp_topr_0.1_mask_overlay.png',
+        f'{data_root}/lrp_lowr_0.1_mask_overlay.png',
+        
+        f'{data_root}/seed_randomr_0.1_mask_overlay.png',
+        f'{data_root}/seed_randomr_lowr_0.1_mask_overlay.png',
+    ]
+    
+    return image_paths, data_root
+
+def main_picturues2():
+    data_root = './data_stage3/paper_images/sample3'
+    
+    image_paths = [
+        f'{data_root}/original_images_3.png',
+        f'{data_root}/vgg16_ori_loss_gradients.png',
+        f'{data_root}/vgg16_ori_output_gradients.png',
+        f'{data_root}/vgg16_ori_grad_times_input_loss.png',
+        f'{data_root}/vgg16_ori_grad_times_input_output.png',
+        f'{data_root}/vgg16_lrp.png',
+    ]
+    return image_paths, data_root
+
+def main_picturues3():
+    data_root = './data_stage3/one_step_attack_total1000_1107'
+    
+    image_paths = [
+        f'{data_root}/vgg16_success_rate_vs_r1.png',
+        f'{data_root}/vgg16_success_rate_vs_r0.png',
+    ]
+    return image_paths, data_root
+
 if __name__ == '__main__':
     # image_paths, data_root = main_vis_single_para()
     # image_paths, data_root = main_vis_single_all()
     # image_paths, data_root = main_gauss()
-    image_paths, data_root = main_vis_ppt()
-    merge_images(image_paths, 1, 8, dir_out=data_root, save_name='merged_ppt.png')
+    # image_paths, data_root = main_vis_ppt()
+    
+    image_paths, data_root = main_picturues3()
+    merge_images(image_paths, 2, 1, dir_out=data_root, save_name='merged_sample1.png')

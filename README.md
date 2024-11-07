@@ -34,6 +34,8 @@ grad-cam:见./visualization/grad_cam.py
 2. 注意在对多个函数进行反向传播时，一定要每次清空梯度（否则会累加），并且第一次反向传播时设置retain_graph=True；
 3. 为了使得每个版块独立，不在这里计算梯度，而是在进行对抗攻击时计算梯度。
 
+LRP:见./algorithms/LRP
+
 ## 对抗攻击方法
 * ./algorithms文件夹实现了不同的基于梯度的对抗攻击方法，实际使用时只会调用封装好的one_step_attacker.py\single_step_attack.py\multi_step_attack.py；
 * 关于这些算法的原理与区别见相关参考文献。
@@ -42,14 +44,24 @@ grad-cam:见./visualization/grad_cam.py
 1. 'all': 所有像素点；
 2. 'positive': 梯度为正的像素点；
 3. 'negative': 梯度为负的像素点；
-4. 'topk':梯度绝对值前topk大的像素点；
-5. 'topr':梯度绝对值前topr比例的像素点；
-5. 'randomk':随机选择randomk个像素点；
-6. 'randomr':随机选择randomr比例的像素；
-7. 'channel_randomk':随机选择randomk个像素，但是3个通道最多只能攻击一个通道；
-8. 'channel_randomr':随机选择比例为randomr个像素，但是3个通道最多只能攻击一个通道；
-9. 'cam_topk':cam绝对值前topk大的像素点；
-10. 'cam_topr':cam绝对值前topr（比例）大的像素点。
+4. 'topr':梯度绝对值前topr比例的像素点；
+5. 'lowr':梯度绝对值后topr比例的像素点；
+6. 'channel_topr': 梯度对三通道计算二范数后，攻击前比例前r的位置的三个channel；
+7. 'channel_lowr': 梯度对三通道计算二范数后，攻击前比例后r的位置的三个channel；
+8. 'cam_topr':cam绝对值前r（比例）大的像素点；
+9. 'cam_lowr':cam绝对值后r（比例）大的像素点；
+10. 'lrp_topr':LRP相关分数大小排序前r大的像素点；
+11. 'lrp_lowr':LRP相关分数大小排序后r大的像素点；
+12. 'seed_randomr': 随机排序后，选择比例为前$r$个像素点；
+13.	'seed_randomr_lowr': 随机排序后，选择比例为后$r$个像素点；
+
+14. 'topk':梯度绝对值前topk大的像素点（弃用）；
+15. 'randomk':随机选择randomk个像素点（弃用）；
+16. 'randomr':随机选择randomr比例的像素（弃用）；
+17. 'channel_randomr':随机选择比例为randomr个像素，但是3个通道最多只能攻击一个通道（弃用）；
+18. 'channel_randomk':随机选择randomk个像素，但是3个通道最多只能攻击一个通道（弃用）；
+19. 'cam_topk':cam绝对值前topk大的像素点（弃用）；
+
 
 ### 单步法：
 主函数：./main/main_single_step_attack.py, 调用algorithms/single_step_attack.py

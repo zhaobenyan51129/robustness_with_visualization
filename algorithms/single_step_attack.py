@@ -14,6 +14,7 @@ from tools.get_classes import get_classes_with_index
 from tools.show_images import visualize_masks_overlay, show_images, show_pixel_distribution, visualize_gradients
 from models.load_model import load_model
 from algorithms.single_step_wrapper import *
+from algorithms.LRP.lrp import LRPModel
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -70,8 +71,9 @@ class OneStepAttack:
         else:
             self.use_cuda = False 
         
-        self.ncols = kwargs.get('ncols', None)
-        self.nrows = kwargs.get('nrows', None)
+        batch_size = images.size(0)
+        self.ncols = kwargs.get('ncols', int(np.ceil(np.sqrt(batch_size))))
+        self.nrows = kwargs.get('nrows', int(np.ceil(batch_size / self.ncols)))
 
     def attack(self, algo='fgsm', eta_list=np.arange(0, 0.1, 0.01), mask_mode=None, show = False, **kwargs):
         '''对模型进行单步法攻击
@@ -116,13 +118,19 @@ class OneStepAttack:
                 self.reshape_transform, self.use_cuda
             )
             mask, pixel_attacked = cam_mask(self.grayscale_cam, mode=mask_mode, **kwargs)
+            
+        elif mask_mode in ['lrp_lowr', 'lrp_topr'] and self.model_str == 'vgg16':
+            lrp_model = LRPModel(self.model)
+            relevance_scores = lrp_model.forward(self.images)
+            mask, pixel_attacked = lrp_mask(relevance_scores, mode=mask_mode, **kwargs)
+        
         else:
             mask, pixel_attacked = grad_mask(self.grad, mode=mask_mode, **kwargs)
         
         if show:
             titles = [f'{i+1}:{self.original_classes[i]}' for i in range(len(self.original_classes))]
-            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, save_name='mask_overlay_visualization.png',nrows=self.nrows, ncols=self.ncols)
-            visualize_gradients(self.grad, titles=titles, output_path=save_path, save_name='ori_grad_visualization.png',nrows=self.nrows, ncols=self.ncols)
+            visualize_masks_overlay(self.images, mask, titles=titles, output_path=save_path, save_name='mask_overlay_visualization.png', nrows=self.nrows, ncols=self.ncols)
+            visualize_gradients(self.grad, titles=titles, output_path=save_path, save_name='ori_grad_visualization.png', nrows=self.nrows, ncols=self.ncols)
             
             
         # 生成扰动并应用掩码
@@ -199,5 +207,5 @@ class OneStepAttack:
                 visualize_gradients(grad, titles=titles, output_path=save_path, save_name=f'adv_grad_visualization_eta{round(eta,2)}.png', nrows=self.nrows, ncols=self.ncols)
                 
   
-        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict, mask
     

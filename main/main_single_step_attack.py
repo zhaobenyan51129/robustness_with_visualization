@@ -26,24 +26,26 @@ def parameter_vis():
     eta_list = [0.01]
     show = True
     mask_modes = {
-        'positive': [None],
-        'negative': [None],
-        'all': [None],
-        'topr': [0.15], 
-        'lowr': [0.85],
-        'channel_topr': [0.15],
-        'channel_lowr': [0.85],
-        'seed_randomr': [0.15],
-        'seed_randomr_lowr': [0.15],
-        'cam_topr': [0.15],  
-        'cam_lowr': [0.85], 
+        # 'positive': [None],
+        # 'negative': [None],
+        # 'all': [None],
+        # 'topr': [0.15], 
+        # 'lowr': [0.85],
+        # 'channel_topr': [0.15],
+        # 'channel_lowr': [0.85],
+        # 'seed_randomr': [0.15],
+        # 'seed_randomr_lowr': [0.15],
+        # 'cam_topr': [0.15],  
+        # 'cam_lowr': [0.85], 
+        'lrp_topr': [0.15],
+        'lrp_lowr': [0.85],
         
     }
     # model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    model_list = ['vit_b_16']
-    data_root = './data_stage3/vis_single_step_attack_1013'
+    model_list = ['vgg16']
+    data_root = './data_stage3/vis_single_step_attack_1107'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'vis_one_step_sample100_1011.xlsx'
+    save_result_file = 'vis_one_step_sample100_1107.xlsx'
     return algo_list, eta_list, mask_modes, model_list, data_root, dataset_file, save_result_file, show
     
 def parameter_total():
@@ -55,21 +57,24 @@ def parameter_total():
         # 'positive': [None],
         # 'negative': [None],
         # 'all': [None],
-        'topr': np.arange(0.01, 1, 0.01),
-        'lowr': np.arange(0.01, 1, 0.01),
-        'channel_topr': np.arange(0.01, 1, 0.01),
-        'channel_lowr': np.arange(0.01, 1, 0.01),
-        'seed_randomr': np.arange(0.01, 1, 0.01),
-        'seed_randomr_lowr': np.arange(0.01, 1, 0.01),
-        'cam_topr': np.arange(0.01, 1, 0.01),
-        'cam_lowr': np.arange(0.01, 1, 0.01),
+        # 'topr': np.arange(0.01, 1, 0.01),
+        # 'lowr': np.arange(0.01, 1, 0.01),
+        # 'channel_topr': np.arange(0.01, 1, 0.01),
+        # 'channel_lowr': np.arange(0.01, 1, 0.01),
+        # 'seed_randomr': np.arange(0.01, 1, 0.01),
+        # 'seed_randomr_lowr': np.arange(0.01, 1, 0.01),
+        # 'cam_topr': np.arange(0.01, 1, 0.01),
+        # 'cam_lowr': np.arange(0.01, 1, 0.01),
+        'lrp_topr': np.arange(0.01, 1, 0.01),
+        'lrp_lowr': np.arange(0.01, 1, 0.01),
     }
-    model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    # model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    model_list = ['vgg16']
     size = 1000
     if size == 1000:
-        data_root = './data_stage3/one_step_attack_total1000_1016'
+        data_root = './data_stage3/one_step_attack_total1000_1107'
         dataset_file = './data_stage2/images_1000_0914.pth'
-        save_result_file = 'one_step_attack_total1000_1016_2.xlsx'
+        save_result_file = 'one_step_attack_total1000_LRP_1107.xlsx'
     else:
         data_root = './data_stage3/single_step_attack_1016'
         dataset_file = './data_stage2/images_100_0911.pth'

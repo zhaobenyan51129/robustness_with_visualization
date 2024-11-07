@@ -166,8 +166,9 @@ def plot_success_rate_vs_norm(data, algo, eta, **kwargs):
         ax.tick_params(axis='x')
         
         # 移除子图中的图例
-        ax.get_legend().remove()
-        
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
     # 添加图例到整个图像的最下面
     handles, labels = ax.get_legend_handles_labels()
     fig.legend(handles, labels, title='Model', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(df_filtered['model'].unique()), fontsize=14, title_fontsize=16)
@@ -275,6 +276,7 @@ def plot_success_rate_vs_r(data, eta, algo, var, label_list, **kwargs):
     '''
     output_path = kwargs.get('output_path', None)
     save_name = kwargs.get('save_name', None)
+    locate = kwargs.get('locate', 'buttle')  # 默认图例位置为底部
     
     df_filtered = data[(round(data['eta'],2) == eta) & (data['algo'] == algo)].copy()
     df_filtered = df_filtered.reset_index(drop=True)
@@ -319,7 +321,9 @@ def plot_success_rate_vs_r(data, eta, algo, var, label_list, **kwargs):
             ax.tick_params(axis='x')
 
             # 移除子图中的图例
-            ax.get_legend().remove()
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
             
     # 隐藏多余的子图
     total_subplots = nrows * ncols
@@ -330,14 +334,16 @@ def plot_success_rate_vs_r(data, eta, algo, var, label_list, **kwargs):
     # 调整子图布局
     plt.tight_layout()
 
-    # 添加图例到整个图像的最下面
+    # 添加图例
     if_legend = kwargs.get('if_legend', True)
     if if_legend:
         handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles, labels, title='Mask Mode', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(mask_mode_list), fontsize=10)
-
-    # 增加底部边距以避免图例挡住子图的坐标轴下方的文字
-    plt.subplots_adjust(bottom=0.2)
+        if locate == 'buttle':
+            fig.legend(handles, labels, title='Mask Mode', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(mask_mode_list), fontsize=10)
+            # 增加底部边距以避免图例挡住子图的坐标轴下方的文字
+            plt.subplots_adjust(bottom=0.2)
+        elif locate == 'right':
+            fig.legend(handles, labels, title='Mask Mode', loc='center left', bbox_to_anchor=(1.05, 0.5), ncol=1, fontsize=10)
 
     if output_path and save_name:
         plt.savefig(f'{output_path}/{save_name}.png', dpi=300, bbox_inches='tight')
@@ -407,7 +413,9 @@ def plot_metrics_vs_success_rate_lines(data, eta, algo, label_list=['l1_norm', '
             if i % 2 == 0 and j % 2 == 0:
                 ax.legend(title='Mask Mode', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
             else:
-                ax.get_legend().remove()
+                legend = ax.get_legend()
+                if legend is not None:
+                    legend.remove()
     plt.tight_layout()
     if output_path and save_name:
         plt.savefig(f'{output_path}/{save_name}.png', dpi=300)
@@ -503,7 +511,9 @@ def plot_loss_vs_pred_loss(data, eta, algo, x='attack_loss', y='pred_loss', **kw
         ax.set_title(f'Model: {model}')
         ax.set_xlabel(x)
         ax.set_ylabel(y)
-        ax.get_legend().remove()
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
     
     # 调整子图布局
     plt.tight_layout()

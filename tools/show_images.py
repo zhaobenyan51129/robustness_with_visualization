@@ -33,7 +33,7 @@ def show_images(imgs, **kwargs):
     
     figsize = (num_cols * scale, num_rows * scale)
     fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize)
-    fig.suptitle(main_title, fontsize=16) 
+    fig.suptitle(main_title, fontsize=12) 
 
     if isinstance(axes, np.ndarray):
         axes = axes.flatten()
@@ -94,16 +94,8 @@ def show_pixel_distribution(imgs, **kwargs):
     batch_size = imgs.shape[0]
     num_rows = kwargs.get('nrows', int(np.ceil(np.sqrt(batch_size))))
     num_cols = kwargs.get('ncols', int(np.ceil(batch_size / num_rows)))
-    # num_rows = kwargs.get('nrows', None)
-    # num_cols = kwargs.get('ncols', None)
-
-    # batch_size = imgs.shape[0]
-    # if num_rows is None:
-    #     num_rows = int(np.ceil(np.sqrt(batch_size)))
-    # if num_cols is None:
-    #     num_cols = int(np.ceil(batch_size / num_rows))
     
-    figsize = (num_cols * scale, num_rows * scale)
+    figsize = (num_cols * scale*1.2, num_rows * scale)
     fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
     if main_title:
         fig.suptitle(main_title, fontsize=16) 
@@ -257,6 +249,59 @@ def visualize_masks_overlay(images, masks, **kwargs):
     else:
         plt.show()
 
+def visualize_channel_masks_overlay(images, masks, **kwargs):
+    '''
+    Overlay masks on the original images.
+
+    Args:
+        images: Tensor of images, shape (batch_size, channels, height, width)
+        masks: Tensor of masks, same shape as images
+        kwargs: Optional parameters
+    '''
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', 'mask_overlay_visualization.png')
+    scale = kwargs.get('scale', 1.5)
+    main_title = kwargs.get('main_title', None)
+
+    batch_size = images.shape[0]
+    channels = images.shape[1]
+
+    num_rows = batch_size
+    num_cols = channels
+
+    figsize = (num_cols * scale, num_rows * scale)
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
+    if main_title:
+        fig.suptitle(main_title, fontsize=12)
+
+    for i in range(batch_size):
+        for j in range(channels):
+            ax = axs[i, j] if batch_size > 1 else axs[j]
+            image_i = images[i].cpu().detach().numpy().transpose(1, 2, 0)
+            mask_i = masks[i, j].cpu().detach().numpy()
+            # Normalize image to [0, 1] for visualization
+            image_i = (image_i - image_i.min()) / (image_i.max() - image_i.min())
+            # Create an overlay by adding the mask to the image
+            overlay = image_i.copy()
+            overlay[:, :, j] = np.clip(overlay[:, :, j] + mask_i, 0, 1)  # Highlight mask regions in the corresponding channel
+            ax.imshow(overlay)
+            ax.axis('off')
+            if titles is not None:
+                if '/' in titles[i]:
+                    ax.set_title(titles[i], fontsize=8, color='red')
+                else:
+                    ax.set_title(titles[i], fontsize=8)
+
+    plt.tight_layout()
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        output_file = os.path.join(output_path, save_name)
+        plt.savefig(output_file)
+        plt.close()
+    else:
+        plt.show()
 
 def visualize_gradients(gradients, **kwargs):
     '''
@@ -291,7 +336,7 @@ def visualize_gradients(gradients, **kwargs):
     fig, axs = plt.subplots(num_rows, num_cols, figsize=figsize)
 
     if main_title:
-        fig.suptitle(main_title, fontsize=16)
+        fig.suptitle(main_title, fontsize=8)
 
     # 确保 axs 是一维数组
     if isinstance(axs, np.ndarray):
@@ -329,6 +374,49 @@ def visualize_gradients(gradients, **kwargs):
     else:
         plt.show()
 
+def plot_relevance_scores(relevance_scores: torch.tensor, **kwargs) -> None:
+    """LRP 可视化（多张图像）
+    Args:
+        relevance_scores: 原始图像的相关性分数，shape: [batch, H, W]
+    """
+    titles = kwargs.get('titles', None)
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', 'lrp.png')
+    main_title = kwargs.get('main_title', None)
+    scale = kwargs.get('scale', 1.5)
+    nrows = kwargs.get('nrows', 1)
+    ncols = kwargs.get('ncols', relevance_scores.shape[0])
 
+    batch_size, img_height, img_width = relevance_scores.shape
+    fig_height, fig_width = (scale * nrows, scale * ncols)
 
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(fig_width, fig_height))
 
+    if main_title:
+        fig.suptitle(main_title, fontsize=12)
+
+    r_min = relevance_scores.min()
+    r_max = relevance_scores.max()
+    relevance_scores = (relevance_scores - r_min) / (r_max - r_min)
+
+    for idx in range(batch_size):
+        if nrows == 1 or ncols == 1:
+            ax = axes[idx] if batch_size > 1 else axes
+        else:
+            ax = axes[idx // ncols, idx % ncols]
+        ax.imshow(relevance_scores[idx], cmap="afmhot")
+        ax.set_axis_off()
+        if titles is not None:
+            if '/' in titles[idx]:
+                ax.set_title(titles[idx], fontsize=8, color='red')
+            else:
+                ax.set_title(titles[idx], fontsize=8)
+
+    plt.tight_layout()
+    if output_path:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        plt.savefig(os.path.join(output_path, save_name), dpi=300)
+        plt.close()
+    else:
+        plt.show()

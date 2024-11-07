@@ -22,25 +22,27 @@ def parameter_total():
     steps = 300
     show = False
     mask_modes = {
-        'positive': [None],
-        'negative': [None],
-        'all': [None],
-        'topr': np.arange(0.05, 1, 0.05),
-        'lowr': np.arange(0.05, 1, 0.05),
-        'channel_topr': np.arange(0.05, 1, 0.05),
-        'channel_lowr': np.arange(0.05, 1, 0.05),
-        'randomr': np.arange(0.05, 1, 0.05),
-        'seed_randomr': np.arange(0.05, 1, 0.05),
-        'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
-        'cam_topr': np.arange(0.05, 1, 0.05),
-        'cam_lowr': np.arange(0.05, 1, 0.05),
+        # 'positive': [None],
+        # 'negative': [None],
+        # 'all': [None],
+        # 'topr': np.arange(0.05, 1, 0.05),
+        # 'lowr': np.arange(0.05, 1, 0.05),
+        # 'channel_topr': np.arange(0.05, 1, 0.05),
+        # 'channel_lowr': np.arange(0.05, 1, 0.05),
+        # 'randomr': np.arange(0.05, 1, 0.05),
+        # 'seed_randomr': np.arange(0.05, 1, 0.05),
+        # 'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
+        # 'cam_topr': np.arange(0.05, 1, 0.05),
+        # 'cam_lowr': np.arange(0.05, 1, 0.05),
+        'lrp_topr': np.arange(0.05, 1, 0.05),
+        'lrp_lowr': np.arange(0.05, 1, 0.05),
     }
 
-    model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    # model_list = ['vit_b_16']
-    data_root = './data_stage3/multi_step_total100_1016'
+    # model_list = ['vit_b_16', 'resnet50', 'vgg16']
+    model_list = ['vgg16']
+    data_root = './data_stage3/multi_step_total100_1107'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'result_multi_step_total100_1016.xlsx'
+    save_result_file = 'result_multi_step_total100_LRP_1107.xlsx'
     return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
 
 def parameter_vis():
@@ -53,21 +55,23 @@ def parameter_vis():
         # 'positive': [None],
         # 'negative': [None],
         # 'all': [None],
-        'topr': [0.2],
-        'lowr': [0.8],
-        'channel_topr': [0.2],
-        'channel_lowr': [0.8],
+        # 'topr': [0.2],
+        # 'lowr': [0.2],
+        # 'channel_topr': [0.2],
+        # 'channel_lowr': [0.2],
         # 'randomr':  [0.2],
         # 'seed_randomr': [0.2],
-        # 'seed_randomr_lowr': [0.8],
+        # 'seed_randomr_lowr': [0.2],
         # 'cam_topr': [0.2],
-        # 'cam_lowr': [0.8],
+        # 'cam_lowr': [0.2],
+        'lrp_topr': [0.2],
+        'lrp_lowr': [0.2],
  }
 
-    model_list = ['vit_b_16'] # ['vit_b_16', 'resnet50', 'vgg16']
-    data_root = './data_stage3/vis_multi_step_1013'
+    model_list = ['vgg16'] # ['vit_b_16', 'resnet50', 'vgg16']
+    data_root = './data_stage3/vis_multi_step_1107'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'vis_result_multi_step_1013.xlsx'
+    save_result_file = 'vis_result_multi_step_1107.xlsx'
     return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
 
         
@@ -82,9 +86,9 @@ def main():
     # dataset = torch.utils.data.Subset(dataset, range(16)) # 验证阶段，取16张
     dataloader = DataLoader(dataset, batch_size=64, shuffle=False)
     
-    # id_list = [0, 11, 3, 7, 8, 9, 10, 13]
-    ncols = None
-    nrows = None
+    # id_list = [10]
+    # ncols = None
+    # nrows = None
     # dataset = torch.utils.data.Subset(dataset, id_list)
     # dataloader = DataLoader(dataset, batch_size=len(id_list), shuffle=False)
     
@@ -95,15 +99,15 @@ def main():
         make_dir(root)
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader, desc="Batches", leave=False), 1):
             batch_pictures = images.size(0)
-            attacker = MultiStepAttack(model_str, images, labels, root, steps=steps,nrows=nrows, ncols=ncols)
+            attacker = MultiStepAttack(model_str, images, labels, root, steps=steps)
             if show:
                 titles = [f'{i+1}: {cls}' for i, cls in enumerate(get_classes_with_index(attacker.labels))]
                 
                 _, vis = run_grad_cam(attacker.model, attacker.images, attacker.labels, attacker.target_layers, attacker.reshape_transform, attacker.use_cuda)
                 
-                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png', main_title= None, ncols=ncols, nrows=nrows)
+                show_images(vis, titles = titles, output_path=root, save_name='ori_grad_cam.png')
                 
-                show_images(attacker.images, titles = titles, output_path=root, save_name='ori_images.png', main_title=None, ncols=ncols, nrows=nrows)
+                show_images(attacker.images, titles = titles, output_path=root, save_name='ori_images.png')
                 
             for algo in algo_list:
                 for eta in eta_list:

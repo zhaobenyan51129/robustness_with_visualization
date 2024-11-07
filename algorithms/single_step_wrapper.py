@@ -10,8 +10,6 @@ sys.path.append(BASE_DIR)
 from tools.compute_topk import compute_top_indics
 from tools.get_classes import get_classes_with_index
 from models.load_model import load_model
-# from data_preprocessor.normalize import apply_normalization
-
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -119,15 +117,22 @@ def grad_mask(grad, mode = None, **kwargs):
 
 def cam_mask(grayscale_cam, mode, **kwargs):
     '''对cam进行掩码处理，生成于原始cam相同形状的掩码，用于标记要修改的像素
-    Args:mode
-        'cam_topr':r为改变的pixel的比例，需要传入参数r
     '''
-    
     mode_dict = {
         'cam_topr': cam_mask_topr,
         'cam_lowr': cam_mask_lowr,
     }
     mask, num_attacked = mode_dict[mode](grayscale_cam, **kwargs)
+    return mask, num_attacked
+
+def lrp_mask(relevance_scores, mode, **kwargs):
+    '''对lrp进行掩码处理，生成于原始lrp相同形状的掩码，用于标记要修改的像素
+    '''
+    mode_dict = {
+        'lrp_topr': lrp_mask_topr,
+        'lrp_lowr': lrp_mask_lowr,
+    }
+    mask, num_attacked = mode_dict[mode](relevance_scores, **kwargs)
     return mask, num_attacked
 
 def grad_mask_positive(grad):
@@ -257,10 +262,10 @@ def grad_mask_channel_randomr(grad, channel_randomr=0.1):
     return mask, num_change_pixels
 
 def cam_mask_topr(grayscale_cam, cam_topr = 0.1):
-    '''topr为改变的pixel的比例，cam绝对值前topr比例的为1，其余为0，在三个通道中随机选一个通道
+    '''topr为改变的pixel的比例，cam绝对值前topr比例的为1，其余为0，同时攻击三个通道
     Args:
         grayscale_cam: cam图, 形状为[batch_size, height, width]
-        cam_topr: 改变的像素比例,小于1/3
+        cam_topr: 改变的像素比例
     Returns:
         mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
         num_change_pixels: 要修改的像素数
@@ -274,10 +279,10 @@ def cam_mask_topr(grayscale_cam, cam_topr = 0.1):
     return mask, num_change_pixels*3
 
 def cam_mask_lowr(grayscale_cam, cam_lowr = 0.1):
-    '''lowr为改变的pixel的比例，cam绝对值后lowr比例的为1，其余为0，在三个通道中随机选一个通道
+    '''lowr为改变的pixel的比例，cam绝对值后lowr比例的为1，其余为0，同时攻击三个通道
     Args:
         grayscale_cam: cam图, 形状为[batch_size, height, width]
-        cam_lowr: 改变的像素比例,小于1/3
+        cam_lowr: 改变的像素比例
     Returns:
         mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
         num_change_pixels: 要修改的像素数
@@ -289,6 +294,48 @@ def cam_mask_lowr(grayscale_cam, cam_lowr = 0.1):
     top_array = compute_top_indics(cam, num_change_pixels, ascending=True)
     mask = torch.Tensor(top_array).to(device)
     return mask, num_change_pixels*3
+
+def lrp_mask_topr(relevance_scores, lrp_topr = 0.1):
+    '''topr为改变的pixel的比例，relevance_scores绝对值前topr比例的为1，其余为0，同时攻击三个通道
+    Args:
+        relevance_scores: LRP图, 形状为[batch_size, height, width]的tensor
+        lrp_topr: 改变的像素比例
+    Returns:
+        mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
+        num_change_pixels: 要修改的像素数
+    '''
+    if relevance_scores.ndimension() == 2:
+        relevance_scores = relevance_scores.unsqueeze(0)
+    relevance_scores = relevance_scores.cpu().numpy()
+    relevance_scores = np.abs(relevance_scores)
+    num_pixels = relevance_scores[0].size
+    num_change_pixels = int(num_pixels * lrp_topr)
+    top_array = compute_top_indics(relevance_scores, num_change_pixels)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels*3
+
+def lrp_mask_lowr(relevance_scores, lrp_lowr = 0.1):
+    '''lowr为改变的pixel的比例，relevance_scores绝对值后lowr比例的为1，其余为0，同时攻击三个通道
+    Args:
+        relevance_scores: LRP图, 形状为[batch_size, height, width]的tensor
+        lrp_lowr: 改变的像素比例
+    Returns:
+        mask: 掩码，[batch_size, channel, height, width], tensor, 1表示要修改的像素
+        num_change_pixels: 要修改的像素数
+    '''
+    if relevance_scores.ndimension() == 2:
+        relevance_scores = relevance_scores.unsqueeze(0)
+    relevance_scores = relevance_scores.cpu().numpy()
+    relevance_scores = np.abs(relevance_scores)
+    num_pixels = relevance_scores[0].size
+    num_change_pixels = int(num_pixels * lrp_lowr)
+    top_array = compute_top_indics(relevance_scores, num_change_pixels, ascending=True)
+    mask = torch.Tensor(top_array).to(device)
+    return mask, num_change_pixels*3
+    
+    
+    
+    
 
 # -------------------- step3: 生成扰动 --------------------
 def generate_perturbations(attack_method, eta_list, grad, **kwargs):

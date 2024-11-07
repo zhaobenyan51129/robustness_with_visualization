@@ -19,3 +19,4 @@ __pycache__/
 !data_analysis_one_step.ipynb
 !data_analysis_multi_step.ipynb
 !data_analysis_classified.ipynb
+!vis.ipynb
