@@ -231,16 +231,23 @@ def main_picturues1():
     return image_paths, data_root
 
 def main_picturues2():
-    data_root = './data_stage3/paper_images/sample3'
+    data_root = './data_stage3/paper_images/fgsm_vs_fgm'
     
     image_paths = [
-        f'{data_root}/original_images_3.png',
-        f'{data_root}/vgg16_ori_loss_gradients.png',
-        f'{data_root}/vgg16_ori_output_gradients.png',
-        f'{data_root}/vgg16_ori_grad_times_input_loss.png',
-        f'{data_root}/vgg16_ori_grad_times_input_output.png',
-        f'{data_root}/vgg16_lrp.png',
+        # f'{data_root}/original_images.png',
+        f'{data_root}/fgsm.png',
+        f'{data_root}/fgsm_attacked.png',
+        f'{data_root}/fgm.png',
+        f'{data_root}/fgm_attacked.png',
     ]
+    
+    # image_paths = [
+    #     f'{data_root}/original_images.png',
+    #     f'{data_root}/i_fgsm.png',
+    #     f'{data_root}/i_fgm.png',
+    #     f'{data_root}/i_fgsm_attacked.png',
+    #     f'{data_root}/i_fgm_attacked.png',
+    # ]
     return image_paths, data_root
 
 def main_picturues3():
@@ -258,5 +265,5 @@ if __name__ == '__main__':
     # image_paths, data_root = main_gauss()
     # image_paths, data_root = main_vis_ppt()
     
-    image_paths, data_root = main_picturues3()
-    merge_images(image_paths, 2, 1, dir_out=data_root, save_name='merged_sample1.png')
+    image_paths, data_root = main_picturues2()
+    merge_images(image_paths, 4, 1, dir_out=data_root, save_name='merged_fgsm_fgm.png')

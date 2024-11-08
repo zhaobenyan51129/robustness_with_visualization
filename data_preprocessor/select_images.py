@@ -241,20 +241,22 @@ def main():
     select.creat_image_file(os.path.join(data_dir, 'images_1000_0914.pth'))
 
 def main_class_data():
-    model_str = 'vit_b_16'
+    model_str = 'vgg16'
     imagenet_root = '../imagenet'
     batch_size = 128
     select = SelectClassImageNet(imagenet_root, model_str, batch_size)
     # 保存类别准确率
-    # select.get_classes_acc(f'./data_stage2/class_acc_{model_str}.json')
+    select.get_classes_acc(f'./data_stage3/class_acc_{model_str}.json')
     # 选择指定类别
     # ranks = [1, 2, 3, 4, 5]
     # selected_items = select.select_class(ranks)
+    
     # 加载指定类别预测正确的图片
-    num_images_per_class = 50
-    class_list = ['1', '512', '569', '642', '959', '680', '314', '468', '382', '460', '782']
-    save_path = './data_stage2/images_classified'
-    select.load_select_images(num_images_per_class, class_list, save_path)
+    # num_images_per_class = 50
+    # # class_list = ['1', '512', '569', '642', '959', '680', '314', '468', '382', '460', '782']
+    # class_list = ['46', '74', '110', '167', '174', '230', '240', '241', '249', '254', '282', '369', '408', '414', '423', '460', '482', '492', '501', '534', '552', '620', '638', '664', '675', '689', '723', '725', '733', '741', '751', '782', '848', '876', '948', '961', '968']
+    # save_path = './data_stage3/images_classified'
+    # select.load_select_images(num_images_per_class, class_list, save_path)
     
      
 if __name__ == '__main__':

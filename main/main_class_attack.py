@@ -13,6 +13,7 @@ import multiprocessing
 from tools.get_classes import get_classes_with_index
 from algorithms.single_step_attack import make_dir, run_grad_cam
 from tools.show_images import show_images
+import numpy as np
 
 def parameter_test_single():
     algo_list = ['fgsm'] 
@@ -21,37 +22,46 @@ def parameter_test_single():
         'positive': [None],
         'negative': [None],
         'all': [None],
-        'topr': [0.15], 
-        'lowr': [0.85],
-        'randomr': [0.15],
-        'cam_topr': [0.15],  
-        'cam_lowr': [0.85], 
+        'topr': np.arange(0.01, 1, 0.02), 
+        'lowr': np.arange(0.01, 1, 0.02),
+        'channel_topr': np.arange(0.01, 1, 0.02),
+        'channel_lowr': np.arange(0.01, 1, 0.02),
+        'seed_randomr': np.arange(0.01, 1, 0.02),
+        'seed_randomr_lowr': np.arange(0.01, 1, 0.02),
+        'cam_topr': np.arange(0.01, 1, 0.02),  
+        'cam_lowr': np.arange(0.01, 1, 0.02), 
     }
     model = 'vit_b_16'
-    data_root = './data_stage2/test_classified_single_attack'
+    data_root = './data_stage3/classified_single_attackall_1108'
     make_dir(data_root)
-    save_result_file = 'classified_single_attack_1010.xlsx'
+    save_result_file = 'classified_single_attack_1108.xlsx'
     return algo_list, eta_list, mask_modes, model, data_root, save_result_file
 
 def parameter_test_multi():
     algo = 'i_fgsm'
     eta = 0.01
-    alpha = 1e-4
-    steps = 300
+    alpha = 1e-3
+    steps = 30
     mask_modes = {
         'positive': [None],
         'negative': [None],
         'all': [None],
         'topr': [0.2],
-        'lowr': [0.8],
-        'randomr':  [0.2],
+        'lowr': [0.2],
+        'channel_topr': [0.2],
+        'channel_lowr': [0.2],
+        # 'randomr':  [0.2],
+        'seed_randomr': [0.2],
+        'seed_randomr_lowr': [0.2],
         'cam_topr': [0.2],
-        'cam_lowr': [0.8],
+        'cam_lowr': [0.2],
+        # 'lrp_topr': [0.2],
+        # 'lrp_lowr': [0.2],
     }
 
     model = 'vit_b_16'
-    data_root = './data_stage2/classified_multi_attack'
-    save_result_file = 'classified_multi_attack_1011.xlsx'
+    data_root = './data_stage3/classified_multi_attack'
+    save_result_file = 'classified_multi_attack_1108.xlsx'
     return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file
 
 def process_indices_single(indices, device_id, show):
@@ -69,8 +79,8 @@ def process_indices_single(indices, device_id, show):
     make_dir(result_dir)
     
     for index in indices:
-        results = pd.DataFrame(columns=['index', 'model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm', 'success_rate', 'original_loss', 'loss_dict_attacked', 'picture_all', 'picture_attacked', 'run_time'])
-        dataset_file = f'./data_stage2/images_classified/{index}.pth'
+        results = pd.DataFrame(columns=['index', 'model', 'algo', 'mask_mode', 'parameter', 'eta', 'pixel_attacked', 'attack_ratio_per_channel', 'l1_norm', 'l2_norm', 'success_rate', 'original_loss', 'attack_loss', 'pred_loss','picture_all', 'picture_attacked', 'run_time'])
+        dataset_file = f'./data_stage3/images_classified/{index}.pth'
         dataset = CustomDataset(dataset_file)
         picture_all = len(dataset)
         dataloader = DataLoader(dataset, batch_size=picture_all, shuffle=False)
@@ -96,11 +106,11 @@ def process_indices_single(indices, device_id, show):
                     for parameter in parameters:
                         start_time = time.time()
                         if parameter is None:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict = attacker.attack(
                                 algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode
                             )
                         else:
-                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked = attacker.attack(
+                            pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict = attacker.attack(
                                 algo=algo, eta_list=eta_list, show=show, mask_mode=mask_mode, **{mask_mode: parameter}
                             )
                         end_time = time.time()
@@ -120,7 +130,8 @@ def process_indices_single(indices, device_id, show):
                                 'l2_norm': [l2_norm_squre],
                                 'success_rate': [success_rate],
                                 'original_loss': [original_loss],
-                                'loss_dict_attacked': [loss_dict_attacked[eta]],
+                                'attack_loss': [loss_dict_attacked[eta]],
+                                'pred_loss': [pred_loss_dict[eta]],
                                 'picture_all': [picture_all],
                                 'picture_attacked': [int(picture_all * success_rate)],
                                 'run_time': [run_time]
@@ -145,8 +156,8 @@ def process_indices_multi(indices, device_id, show):
     make_dir(result_dir)
 
     for index in indices:
-        results = pd.DataFrame(columns=['index', 'model', 'algo', 'alpha', 'mask_mode', 'parameter', 'step', 'eta',  'l1_norm', 'l2_norm','success_rate', 'loss', 'run_time'])
-        dataset_file = f'./data_stage2/images_classified/{index}.pth'
+        results = pd.DataFrame(columns=['index', 'model', 'algo', 'alpha', 'mask_mode', 'parameter', 'step', 'eta',  'l1_norm', 'l2_norm','success_rate', 'loss', 'pred_loss', 'run_time'])
+        dataset_file = f'./data_stage3/images_classified/{index}.pth'
         dataset = CustomDataset(dataset_file)
         picture_all = len(dataset)
         dataloader = DataLoader(dataset, batch_size=picture_all, shuffle=False)
@@ -168,7 +179,7 @@ def process_indices_multi(indices, device_id, show):
                 for parameter in parameters:
                     start_time = time.time()
                     if parameter is None:
-                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
                             algo=algo, 
                             alpha=alpha, 
                             eta=eta, 
@@ -177,7 +188,7 @@ def process_indices_multi(indices, device_id, show):
                             show=show
                         )
                     else:
-                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict = attacker.attack(
+                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
                             algo=algo, 
                             alpha=alpha, 
                             eta=eta, 
@@ -201,6 +212,7 @@ def process_indices_multi(indices, device_id, show):
                             'l2_norm': l2_norm_squre_dict[step],
                             'success_rate': success_rate,
                             'loss': loss_dict[step],
+                            'pred_loss': pred_loss_dict[step],
                             'run_time': run_time,    
                         }, index=[0])
                         results = pd.concat([results, new_row], ignore_index=True)
@@ -273,12 +285,12 @@ def main_multi(index_list, show):
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)
-    # mode = 'single' 
-    mode = 'multi' 
+    mode = 'single' 
+    # mode = 'multi' 
     show = False
     # 选出来的类别
-    index_list = ['1', '512', '569', '642', '959', '680', '314', '468', '382', '460', '782']
-    # index_list = ['1', '512']
+    index_list = ['110', '174', '230', '241', '249', '254', '369', '408', '423', '460', '492', '534', '552', '723', '725', '733', '741', '751', '848', '948']
+    # index_list = ['110', '174']
     
     t0 = time.time()
     if mode == 'single':

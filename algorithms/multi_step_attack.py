@@ -120,10 +120,13 @@ class MultiStepAttack(OneStepAttack):
                     self.target_layers, self.reshape_transform, self.use_cuda
                 )
                 mask, _ = cam_mask(grayscale_cam, mode=mask_mode, **kwargs)
-            elif mask_mode in ['lrp_lowr', 'lrp_topr'] and self.model_str == 'vgg16':
-                lrp_model = LRPModel(self.model)
-                relevance_scores = lrp_model.forward(self.images)
-                mask, pixel_attacked = lrp_mask(relevance_scores, mode=mask_mode, **kwargs)
+            elif mask_mode in ['lrp_lowr', 'lrp_topr']:
+                if self.model_str == 'vgg16':
+                    lrp_model = LRPModel(self.model)
+                    relevance_scores = lrp_model.forward(self.images)
+                    mask, pixel_attacked = lrp_mask(relevance_scores, mode=mask_mode, **kwargs)
+                else:
+                    break
             
             else:
                 mask, _ = grad_mask(grad, mode=mask_mode, **kwargs)

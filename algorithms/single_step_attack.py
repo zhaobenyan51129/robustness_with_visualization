@@ -186,10 +186,10 @@ class OneStepAttack:
                 show_images(perturbations[i], output_path=save_path, save_name=f'perturbations_eta{round(eta,2)}.png', titles=titles, main_title=main_title, nrows=self.nrows, ncols=self.ncols)
                 
                 # 扰动分布以及一范数和二范数
-                norm1 = round(perturbations[i].abs().sum().cpu().item(), 4)
-                norm2 = round((perturbations[i] ** 2).sum().cpu().item(), 6)
+                # norm1 = round(perturbations[i].abs().sum().cpu().item(), 4)
+                # norm2 = round((perturbations[i] ** 2).sum().cpu().item(), 6)
                 # main_title_per = f'eta: {eta}, L1: {norm1}, L2: {norm2}, success_rate: {success_rate:.2f}'
-                main_title_per = None
+                # main_title_per = None
                 # show_pixel_distribution(perturbations[i], output_path=save_path, save_name=f'perturbation_distribution_eta{round(eta,2)}.png', titles=titles, main_title=main_title_per,nrows=self.nrows, ncols=self.ncols)
                 
                 # 像素分布
@@ -207,5 +207,5 @@ class OneStepAttack:
                 visualize_gradients(grad, titles=titles, output_path=save_path, save_name=f'adv_grad_visualization_eta{round(eta,2)}.png', nrows=self.nrows, ncols=self.ncols)
                 
   
-        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict, mask
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict
     

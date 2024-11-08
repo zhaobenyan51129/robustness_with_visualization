@@ -69,7 +69,9 @@ def plot_success_rate_vs_mask_mode(data, **kwargs):
         if i != 3:
             ax.legend(title='Model', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
         else:
-            ax.get_legend().remove()
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
         
     plt.tight_layout()
     if output_path and save_name:
@@ -133,7 +135,9 @@ def plot_success_rate_vs_r(data, var, label_list, **kwargs):
             ax.tick_params(axis='x')
             
             # 移除子图中的图例
-            ax.get_legend().remove()
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
             
     # 隐藏多余的子图
     total_subplots = nrows * ncols
@@ -202,7 +206,9 @@ def plot_loss_vs_pred_loss(data, x='attack_loss', y='pred_loss', **kwargs):
         ax.set_title(f'Model: {model}')
         ax.set_xlabel(x)
         ax.set_ylabel(y)
-        ax.get_legend().remove()
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
     
     # 调整子图布局
     plt.tight_layout()
@@ -274,7 +280,9 @@ def plot_success_rate_vs_step(data, parameter, var, label_list, **kwargs):
             ax.set_xlabel(f'{var}', fontsize=10)
             ax.set_ylabel(label, fontsize=10)
             ax.tick_params(axis='x')
-            ax.get_legend().remove()
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
             
     # 隐藏多余的子图
     total_subplots = nrows * ncols
