@@ -6,6 +6,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+
 import time
 from tqdm import tqdm
 import multiprocessing
@@ -19,9 +20,9 @@ def parameter_test_single():
     algo_list = ['fgsm'] 
     eta_list = [0.01]
     mask_modes = {
-        'positive': [None],
-        'negative': [None],
-        'all': [None],
+        # 'positive': [None],
+        # 'negative': [None],
+        # 'all': [None],
         'topr': np.arange(0.01, 1, 0.02), 
         'lowr': np.arange(0.01, 1, 0.02),
         'channel_topr': np.arange(0.01, 1, 0.02),
@@ -32,20 +33,20 @@ def parameter_test_single():
         'cam_lowr': np.arange(0.01, 1, 0.02), 
     }
     model = 'vit_b_16'
-    data_root = './data_stage3/classified_single_attackall_1108'
+    data_root = './data_stage3/classified_single_attacktest_1109'
     make_dir(data_root)
-    save_result_file = 'classified_single_attack_1108.xlsx'
+    save_result_file = 'classified_single_attack_1109.xlsx'
     return algo_list, eta_list, mask_modes, model, data_root, save_result_file
 
 def parameter_test_multi():
     algo = 'i_fgsm'
     eta = 0.01
-    alpha = 1e-3
-    steps = 30
+    alpha = 2e-4
+    steps = 100
     mask_modes = {
-        'positive': [None],
-        'negative': [None],
-        'all': [None],
+        # 'positive': [None],
+        # 'negative': [None],
+        # 'all': [None],
         'topr': [0.2],
         'lowr': [0.2],
         'channel_topr': [0.2],
@@ -60,8 +61,8 @@ def parameter_test_multi():
     }
 
     model = 'vit_b_16'
-    data_root = './data_stage3/classified_multi_attack'
-    save_result_file = 'classified_multi_attack_1108.xlsx'
+    data_root = './data_stage3/classified_multi_attackall_1109'
+    save_result_file = 'classified_multi_attack_1109.xlsx'
     return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file
 
 def process_indices_single(indices, device_id, show):
@@ -285,12 +286,12 @@ def main_multi(index_list, show):
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)
-    mode = 'single' 
-    # mode = 'multi' 
+    # mode = 'single' 
+    mode = 'multi' 
     show = False
     # 选出来的类别
     index_list = ['110', '174', '230', '241', '249', '254', '369', '408', '423', '460', '492', '534', '552', '723', '725', '733', '741', '751', '848', '948']
-    # index_list = ['110', '174']
+    # index_list = ['552']
     
     t0 = time.time()
     if mode == 'single':

@@ -207,5 +207,4 @@ class OneStepAttack:
                 visualize_gradients(grad, titles=titles, output_path=save_path, save_name=f'adv_grad_visualization_eta{round(eta,2)}.png', nrows=self.nrows, ncols=self.ncols)
                 
   
-        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict
-    
+        return pixel_attacked, success_rate_dict, attack_ratio_per_channel, l1_norm, l2_norm_squre, original_loss, loss_dict_attacked, pred_loss_dict, mask
