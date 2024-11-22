@@ -1,11 +1,11 @@
 # robustness_with_visualization
-本代码库使用经典FGSM（单步）和I-FGSM(多步）算法进行对抗鲁棒性攻击，并利用grad-cam可视化方法可视化对抗样本，探究攻击不同位置时对抗鲁棒性的区别。
+本代码库使用经典FGSM（单步）和I-FGSM(多步）算法进行对抗鲁棒性攻击，并基于GradCAM\LRP可视化方法选取攻击位置，以及可视化对抗样本，探究攻击不同位置时对抗鲁棒性的区别，以评估可视化方法的可靠性。
 
 ## 代码环境
 * ./dependence/robustness_environment.yml是此代码路使用的conda环境文件，使用命令conda env create -f {文件地址}导入环境。
 
 ## 模型
-1. 本代码库支持使用各种图片分类模型，详见：models/load_model.py;
+1. 本代码库支持使用各种图片分类模型，详见：models/load_model.py，如果需要添加新的模型在这里加即可；
 2. 实际实验仅使用vit_b_16\resnet50\vgg16，其中vit_b_16是使用的代码models/vit_model.py（主要是因为gadcam可视化算法对vit模型需要单独处理，写代码时是基于此模型），其他是调用pytorch自带模型.
 
 ## 数据来源
@@ -17,28 +17,30 @@
     * 数据1：筛选所有模型预测正确的指定张图片（实验时两个数据集一个是1000张，一个是100张，分别命名为：ADV1000,ADV100)；
     * 数据2：筛选指定label，并选出在指定模型下所有预测正确的图片；
     * 所有筛选出来的图片文件保存在data文件夹下（可以自己指定）；
+3. 数据集封装与读取：见data_preprocessor/load_images.py/CustomDataset.
   
 ## 工具函数
 ./tools文件夹下是一些常用的工具函数，包括：
 1. show_images.py: 画图常用函数；
 2. create_video.py: 将图片做成视频；
 3. get_classes.py: 根据json文件获取imagenet每个类别的索引对应类别的英文/中文名；
-4. compute_topk.py: 计算输入数组的前n大的值和位置；
+4. compute_topk.py: 计算输入数组的前n大的值和位置（用于挑选攻击的像素点）；
 5. merge_images.py: 将多张图片合并为一整张大图；
 6. show_result_one_step.py：对于单步法的结果进行分析并画图；
 7. show_result_multi_step.py：对于多步法的结果进行分析并画图；
 8. show_result_class.py：对分类别攻击的结果进行分析并画图。
 
 ## 可视化
-grad-cam:见./visualization/grad_cam.py
+GradCAM:见./visualization/grad_cam.py
 1. 可以选择在类class GradCAM的__call__方法中调用self.get_grad_of_loss()同时输出梯度；
 2. 注意在对多个函数进行反向传播时，一定要每次清空梯度（否则会累加），并且第一次反向传播时设置retain_graph=True；
 3. 为了使得每个版块独立，不在这里计算梯度，而是在进行对抗攻击时计算梯度。
 
-LRP:见./algorithms/LRP
+LRP:见./algorithms/LRP，原本应该挪到visualization文件夹下，已经封装好了就懒得动了。
 
 ## 对抗攻击方法
-* ./algorithms文件夹实现了不同的基于梯度的对抗攻击方法，实际使用时只会调用封装好的one_step_attacker.py\single_step_attack.py\multi_step_attack.py；
+* ./algorithms文件夹实现了不同的基于梯度的对抗攻击方法，实际使用时只会调用封装好的single_step_attack.py\multi_step_attack.py；
+* single_step_wrapper.py封装了利用不同的可视化方法选择攻击位置的函数，如果要加新的选攻击位置的方式可以在这里加，只需要保持输入输出与已有的一致，并在主函数中添加相关的"mask_mode"参数；
 * 关于这些算法的原理与区别见相关参考文献。
 
 ### 攻击pixel选择
@@ -73,7 +75,10 @@ LRP:见./algorithms/LRP
 
 ### 多步法
 主函数：./main/main_multi_step_attack.py, 调用algorithms/multi_step_attack.py
-* 注意：这里会在每一步重新计算要攻击的pixel,事实上应该只在第一步计算要攻击的pixel并固定攻击位置，但是实验发现其实攻击的位置不会发生太大变化（比如在每一步画出被攻击的位置mask，发现没有太大变化），因此没有进行修改，后续可以考虑修改。
+* 注意：
+- "attack"方法 会在每一步重新计算要攻击的pixel
+- "attack_fixed"方法 只在第一步计算要攻击的pixel并固定攻击位置
+实验结果上相差不大（指不同mask_mode下的成功率顺序等）
 
 #### 攻击算法选择
 1. i_fgsm
@@ -89,4 +94,4 @@ main文件夹下的是代码入口，里面可以看到保存的指标，单步�
 ## 结果分析
 主目录下的三个文件data_analysis_one_step.ipynb、data_analysis_multi_step.ipynb、data_analysis_classified.ipynb分别是对不同的实验结果进行分析，由于内存限制，数据集较大时分多个batch进行实验，在结果分析中会对每个batch的数据进行合并、基础数据预处理、画图。
 vis.ipynb是一些常用的画图，主要用于取少量样本进行论文插图绘制。
-* 为了方便只画需要的图，.ipynb文件没有进行封装，可能比较乱，仅供参考。
+* 为了方便画图，.ipynb文件没有进行封装，可能比较乱，仅供参考。

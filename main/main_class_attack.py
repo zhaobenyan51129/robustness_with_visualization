@@ -43,6 +43,7 @@ def parameter_test_multi():
     eta = 0.01
     alpha = 2e-4
     steps = 100
+    fixed = False
     mask_modes = {
         # 'positive': [None],
         # 'negative': [None],
@@ -63,7 +64,7 @@ def parameter_test_multi():
     model = 'vit_b_16'
     data_root = './data_stage3/classified_multi_attackall_1109'
     save_result_file = 'classified_multi_attack_1109.xlsx'
-    return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file
+    return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file, fixed
 
 def process_indices_single(indices, device_id, show):
     # 设置当前进程使用的 GPU
@@ -152,7 +153,7 @@ def process_indices_multi(indices, device_id, show):
     from torch.utils.data import DataLoader
     from algorithms.multi_step_attack import MultiStepAttack
 
-    algo, eta, alpha, steps, mask_modes, model_str, data_root, _ = parameter_test_multi()
+    algo, eta, alpha, steps, mask_modes, model_str, data_root, _ , fixed = parameter_test_multi()
     result_dir = os.path.join(data_root, 'results')
     make_dir(result_dir)
 
@@ -180,24 +181,45 @@ def process_indices_multi(indices, device_id, show):
                 for parameter in parameters:
                     start_time = time.time()
                     if parameter is None:
-                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
-                            algo=algo, 
-                            alpha=alpha, 
-                            eta=eta, 
-                            mask_mode=mask_mode,
-                            early_stopping=False,
-                            show=show
-                        )
+                        if not fixed:
+                            success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
+                                algo=algo, 
+                                alpha=alpha, 
+                                eta=eta, 
+                                mask_mode=mask_mode,
+                                early_stopping=False,
+                                show=show
+                            )
+                        else:
+                            success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack_fixed(
+                                algo=algo, 
+                                alpha=alpha, 
+                                eta=eta, 
+                                mask_mode=mask_mode,
+                                early_stopping=False,
+                                show=show
+                            )
                     else:
-                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
-                            algo=algo, 
-                            alpha=alpha, 
-                            eta=eta, 
-                            mask_mode=mask_mode, 
-                            early_stopping=False,
-                            show=show,
-                            **{mask_mode: parameter}
-                        )
+                        if not fixed:
+                            success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
+                                algo=algo, 
+                                alpha=alpha, 
+                                eta=eta, 
+                                mask_mode=mask_mode, 
+                                early_stopping=False,
+                                show=show,
+                                **{mask_mode: parameter}
+                            )
+                        else:
+                            success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack_fixed(
+                                algo=algo, 
+                                alpha=alpha, 
+                                eta=eta, 
+                                mask_mode=mask_mode, 
+                                early_stopping=False,
+                                show=show,
+                                **{mask_mode: parameter}
+                            )
                     run_time = round(time.time() - start_time,3)
                     for step, success_rate in success_rate_dict.items():
                         new_row = pd.DataFrame({
@@ -256,7 +278,7 @@ def main_multi(index_list, show):
     num_gpus = torch.cuda.device_count()
     device_ids = [i for i in range(num_gpus)]
     
-    _, _, _, _, _, _, data_root, save_result_file = parameter_test_multi()
+    _, _, _, _, _, _, data_root, save_result_file, _ = parameter_test_multi()
     result_dir = os.path.join(data_root, 'results')
     
     # 将 index_list 平均分配给每个 GPU

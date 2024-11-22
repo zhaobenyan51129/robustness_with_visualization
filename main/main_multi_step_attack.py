@@ -21,64 +21,66 @@ def parameter_total():
     alpha_list = [1e-4]
     steps = 300
     show = False
+    fixed = True
     mask_modes = {
-        # 'positive': [None],
-        # 'negative': [None],
-        # 'all': [None],
-        # 'topr': np.arange(0.05, 1, 0.05),
-        # 'lowr': np.arange(0.05, 1, 0.05),
-        # 'channel_topr': np.arange(0.05, 1, 0.05),
-        # 'channel_lowr': np.arange(0.05, 1, 0.05),
-        # 'randomr': np.arange(0.05, 1, 0.05),
-        # 'seed_randomr': np.arange(0.05, 1, 0.05),
-        # 'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
-        # 'cam_topr': np.arange(0.05, 1, 0.05),
-        # 'cam_lowr': np.arange(0.05, 1, 0.05),
+        'positive': [None],
+        'negative': [None],
+        'all': [None],
+        'topr': np.arange(0.05, 1, 0.05),
+        'lowr': np.arange(0.05, 1, 0.05),
+        'channel_topr': np.arange(0.05, 1, 0.05),
+        'channel_lowr': np.arange(0.05, 1, 0.05),
+        'randomr': np.arange(0.05, 1, 0.05),
+        'seed_randomr': np.arange(0.05, 1, 0.05),
+        'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
+        'cam_topr': np.arange(0.05, 1, 0.05),
+        'cam_lowr': np.arange(0.05, 1, 0.05),
         'lrp_topr': np.arange(0.05, 1, 0.05),
         'lrp_lowr': np.arange(0.05, 1, 0.05),
     }
 
     # model_list = ['vit_b_16', 'resnet50', 'vgg16']
     model_list = ['vgg16']
-    data_root = './data_stage3/multi_step_total100_1107'
+    data_root = './data_stage3/multi_step_total100_fixed_1122'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'result_multi_step_total100_LRP_1107.xlsx'
-    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
+    save_result_file = 'result_multi_step_total100_fixed_1122.xlsx'
+    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show, fixed
 
 def parameter_vis():
     algo_list = ['i_fgsm']
     eta_list = [0.01]
     alpha_list = [1e-4]
     steps = 300
-    show = True
+    show = False
+    fixed = True
     mask_modes = {
-        # 'positive': [None],
-        # 'negative': [None],
-        # 'all': [None],
-        # 'topr': [0.2],
-        # 'lowr': [0.2],
-        # 'channel_topr': [0.2],
-        # 'channel_lowr': [0.2],
-        # 'randomr':  [0.2],
-        # 'seed_randomr': [0.2],
-        # 'seed_randomr_lowr': [0.2],
-        # 'cam_topr': [0.2],
-        # 'cam_lowr': [0.2],
+        'positive': [None],
+        'negative': [None],
+        'all': [None],
+        'topr': [0.2],
+        'lowr': [0.2],
+        'channel_topr': [0.2],
+        'channel_lowr': [0.2],
+        'randomr':  [0.2],
+        'seed_randomr': [0.2],
+        'seed_randomr_lowr': [0.2],
+        'cam_topr': [0.2],
+        'cam_lowr': [0.2],
         'lrp_topr': [0.2],
         'lrp_lowr': [0.2],
  }
 
     model_list = ['vgg16'] # ['vit_b_16', 'resnet50', 'vgg16']
-    data_root = './data_stage3/vis_multi_step_1107'
+    data_root = './data_stage3/vis_multi_step_fixed_1122'
     dataset_file = './data_stage2/images_100_0911.pth'
-    save_result_file = 'vis_result_multi_step_1107.xlsx'
-    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show
+    save_result_file = 'vis_result_multi_step_fixed_1122.xlsx'
+    return algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show, fixed
 
         
 def main():
-    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_total()
+    algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show, fixed = parameter_total()
     
-    # algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show = parameter_vis()
+    # algo_list, eta_list, alpha_list, steps, mask_modes, model_list, data_root, dataset_file, save_result_file, show, fixed = parameter_vis()
     
     print(f'data_root is {data_root}')
     
@@ -116,23 +118,44 @@ def main():
                             for parameter in parameters:
                                 start_time = time.time()
                                 if parameter is None:
-                                   success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
-                                       algo=algo, 
-                                       alpha=alpha, 
-                                       eta=eta, 
-                                       mask_mode=mask_mode,
-                                       early_stopping=False,
-                                       show=show
-                                       )
+                                    if not fixed:
+                                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
+                                            algo=algo, 
+                                            alpha=alpha, 
+                                            eta=eta, 
+                                            mask_mode=mask_mode,
+                                            early_stopping=False,
+                                            show=show
+                                            )
+                                    else:
+                                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack_fixed(
+                                            algo=algo, 
+                                            alpha=alpha, 
+                                            eta=eta, 
+                                            mask_mode=mask_mode, 
+                                            early_stopping=False,
+                                            show=show
+                                            )
+
                                 else:
-                                    success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
-                                        algo=algo, 
-                                        alpha=alpha, 
-                                        eta=eta, 
-                                        mask_mode=mask_mode, 
-                                        early_stopping=False,
-                                        show=show,
-                                        **{mask_mode: parameter})
+                                    if not fixed:
+                                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack(
+                                            algo=algo, 
+                                            alpha=alpha, 
+                                            eta=eta, 
+                                            mask_mode=mask_mode, 
+                                            early_stopping=False,
+                                            show=show,
+                                            **{mask_mode: parameter})
+                                    else:
+                                        success_rate_dict, loss_dict, l1_norm_dict, l2_norm_squre_dict, pred_loss_dict = attacker.attack_fixed(
+                                            algo=algo, 
+                                            alpha=alpha, 
+                                            eta=eta, 
+                                            mask_mode=mask_mode, 
+                                            early_stopping=False,
+                                            show=show,
+                                            **{mask_mode: parameter})
                                 run_time = round(time.time() - start_time,3)
 
                                 for step, success_rate in success_rate_dict.items():
