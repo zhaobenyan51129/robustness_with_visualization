@@ -43,16 +43,16 @@ def parameter_test_multi():
     eta = 0.01
     alpha = 2e-4
     steps = 100
-    fixed = False
+    fixed = True
     mask_modes = {
-        # 'positive': [None],
-        # 'negative': [None],
-        # 'all': [None],
+        'positive': [None],
+        'negative': [None],
+        'all': [None],
         'topr': [0.2],
         'lowr': [0.2],
         'channel_topr': [0.2],
         'channel_lowr': [0.2],
-        # 'randomr':  [0.2],
+        'randomr':  [0.2],
         'seed_randomr': [0.2],
         'seed_randomr_lowr': [0.2],
         'cam_topr': [0.2],
@@ -62,8 +62,8 @@ def parameter_test_multi():
     }
 
     model = 'vit_b_16'
-    data_root = './data_stage3/classified_multi_attackall_1109'
-    save_result_file = 'classified_multi_attack_1109.xlsx'
+    data_root = './data_stage3/classified_multi_attackall_fixed_1126'
+    save_result_file = 'classified_multi_attack_1126.xlsx'
     return algo, eta, alpha, steps, mask_modes, model, data_root, save_result_file, fixed
 
 def process_indices_single(indices, device_id, show):

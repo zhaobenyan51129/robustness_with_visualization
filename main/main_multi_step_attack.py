@@ -35,12 +35,12 @@ def parameter_total():
         'seed_randomr_lowr': np.arange(0.05, 1, 0.05),
         'cam_topr': np.arange(0.05, 1, 0.05),
         'cam_lowr': np.arange(0.05, 1, 0.05),
-        'lrp_topr': np.arange(0.05, 1, 0.05),
-        'lrp_lowr': np.arange(0.05, 1, 0.05),
+        # 'lrp_topr': np.arange(0.05, 1, 0.05),
+        # 'lrp_lowr': np.arange(0.05, 1, 0.05),
     }
 
-    # model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    model_list = ['vgg16']
+    model_list = ['vit_b_16', 'resnet50']
+    # model_list = ['vgg16']
     data_root = './data_stage3/multi_step_total100_fixed_1122'
     dataset_file = './data_stage2/images_100_0911.pth'
     save_result_file = 'result_multi_step_total100_fixed_1122.xlsx'

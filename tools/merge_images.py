@@ -251,11 +251,11 @@ def main_picturues2():
     return image_paths, data_root
 
 def main_picturues3():
-    data_root = './data_stage3/one_step_attack_total1000_1107'
+    data_root = './data_stage3/multi_step_total100_fixed_1122'
     
     image_paths = [
-        f'{data_root}/vgg16_success_rate_vs_r1.png',
-        f'{data_root}/vgg16_success_rate_vs_r0.png',
+        f'{data_root}/multi_only_success_rate_vs_parameter.png',
+        f'{data_root}/success_rate_vs_parameter0.png',
     ]
     return image_paths, data_root
 
@@ -265,5 +265,5 @@ if __name__ == '__main__':
     # image_paths, data_root = main_gauss()
     # image_paths, data_root = main_vis_ppt()
     
-    image_paths, data_root = main_picturues2()
-    merge_images(image_paths, 4, 1, dir_out=data_root, save_name='merged_fgsm_fgm.png')
+    image_paths, data_root = main_picturues3()
+    merge_images(image_paths, 2, 1, dir_out=data_root, save_name='merged_multi_step_curve.png')

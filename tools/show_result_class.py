@@ -236,3 +236,51 @@ def plot_accuracy_success_rate_and_loss(data, **kwargs):
         plt.savefig(f'{output_path}/{save_name}.png', dpi=300)
     else:
         plt.show()
+        
+def plot_accuracy_success_rate(data, **kwargs):
+    '''
+    绘制Rank与Accuracy和Success Rate的关系图。
+
+    Args:
+        data (pd.DataFrame): 数据集，包含'Rank', 'Accuracy', 'success_rate'列
+    '''
+    output_path = kwargs.get('output_path', None)
+    save_name = kwargs.get('save_name', None)
+
+    # 创建调色板
+    palette = sns.color_palette("tab10")
+
+    # 创建图形
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    # 绘制Accuracy的散点图和预测曲线
+    sns.scatterplot(data=data, x='Rank', y='Accuracy', color=palette[0], ax=ax1, label='Accuracy')
+    sns.lineplot(data=data, x='Rank', y='Accuracy', color=palette[0], ax=ax1)
+
+    # 设置左侧纵坐标标签和范围
+    ax1.set_ylabel('Accuracy', color=palette[0])
+    ax1.set_ylim(0, 1.1)  # 设置纵坐标范围
+    ax1.tick_params(axis='y', labelcolor=palette[0])
+
+    # 创建右侧纵坐标轴
+    ax2 = ax1.twinx()
+    sns.lineplot(data=data, x='Rank', y='success_rate', color=palette[1], ax=ax2, label='Success Rate')
+    ax2.set_ylabel('Success Rate', color=palette[1])
+    ax2.set_ylim(0, 1.1)  # 设置纵坐标范围
+    ax2.tick_params(axis='y', labelcolor=palette[1])
+
+    # 设置图形标题和横坐标标签
+    plt.title('Accuracy and Success Rate by Rank')
+    ax1.set_xlabel('Rank')
+
+    # 确保横坐标是整数并显示所有Rank值
+    ax1.set_xticks(data['Rank'].unique())
+
+    # 显示图例
+    ax1.legend(loc='upper left', bbox_to_anchor=(0, 1))
+    ax2.legend(loc='upper right', bbox_to_anchor=(1, 1))
+
+    if output_path and save_name:
+        plt.savefig(f'{output_path}/{save_name}.png', dpi=300)
+    else:
+        plt.show()

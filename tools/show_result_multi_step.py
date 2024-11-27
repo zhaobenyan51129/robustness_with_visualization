@@ -93,12 +93,12 @@ def plot_success_rate_vs_r(data, var, label_list, **kwargs):
     output_path = kwargs.get('output_path', None)
     save_name = kwargs.get('save_name', None)
     
-    df_filtered = data[(data['end'] == 1) & (data['mask_mode'].isin(['topr', 'channel_topr', 'cam_topr','seed_randomr', 'seed_randomr_lowr', 'cam_lowr', 'channel_lowr', 'lowr']))].copy()
-    df_filtered = df_filtered.reset_index(drop=True)
-    
     # 获取唯一的模型和mask_mode
     model_list = ['vit_b_16', 'resnet50', 'vgg16']
-    mask_mode_list = kwargs.get('mask_mode_list', df_filtered['mask_mode'].unique())
+    mask_mode_list = kwargs.get('mask_mode_list', data['mask_mode'].unique())
+    
+    df_filtered = data[(data['end'] == 1) & (data['mask_mode'].isin(mask_mode_list))].copy()
+    df_filtered = df_filtered.reset_index(drop=True)
     
     ncols = kwargs.get('ncols', len(label_list))
     nrows = kwargs.get('nrows', len(model_list))
