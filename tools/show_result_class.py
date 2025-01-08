@@ -175,11 +175,19 @@ def plot_success_rate_vs_step(data, parameter, var, label_list, **kwargs):
     plt.tight_layout()
 
     if_legend = kwargs.get('if_legend', True)
+    locate = kwargs.get('locate', 'buttle')  # 默认图例位置为底部
     if if_legend:
         handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles, labels, title='Mask Mode', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(mask_mode_list), fontsize=20)
+        if locate == 'buttle':
+            fig.legend(handles, labels, title='Mask Mode', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(mask_mode_list), fontsize=20)
+            # 增加底部边距以避免图例挡住子图的坐标轴下方的文字
+            plt.subplots_adjust(bottom=0.02)
+        elif locate == 'right':
+            fig.legend(handles, labels, title='Mask Mode', loc='center left', bbox_to_anchor=(1.05, 0.5), ncol=1, fontsize=20)
+        
+        # fig.legend(handles, labels, title='Mask Mode', loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=len(mask_mode_list), fontsize=20)
 
-    plt.subplots_adjust(bottom=0.05)
+    # plt.subplots_adjust(bottom=0.05)
     
     if output_path and save_name:
         plt.savefig(f'{output_path}/{save_name}.png', dpi=300)
